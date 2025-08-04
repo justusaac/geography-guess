@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Register</title>
+	<link rel="stylesheet" href="/form_page_style.css"/>
+	<script>
+		function showError(msg){
+			const elem = document.getElementById("error-message");
+			elem.innerHTML = msg;
+			elem.style.display = "block";
+		}
+		function hideError(){
+			document.getElementById("error-message").style.display = "none";
+		}
+		async function sendForm(event){
+			event.preventDefault();
+			const fd = new FormData(document.getElementById('register-form'));
+			if(fd.get('password') !== fd.get('confirm-password')){
+				showError("Confirm password doesn't match");
+				return;
+			}
+			hideError();
+
+			const response = await fetch("/register", {method:'POST', redirect:'follow', body:new URLSearchParams(fd)});
+			if(response.redirected){
+				window.location.href = response.url;
+				return;
+			}
+			showError(await response.text())
+
+			return false;
+		}
+	</script>
+</head>
+<body>
+	<h3>Register</h3>
+	<form id="register-form" onsubmit="sendForm(event)">
+		<label for="username">Username</label><input name="username" id="username" type="text"/>
+		<label for="password">Password</label><input name="password" id="password" type="password"/>
+		<label for="confirm-password">Confirm password</label><input name="confirm-password" id="confirm-password" type="password"/>
+		<input type="submit" value="Register" />
+		<div class="error-message" id="error-message">i get em</div>
+	</form>
+</body>
+</html>

@@ -1,0 +1,4 @@
+/node_modules
+.env
+*.map
+/map_generation/data/*

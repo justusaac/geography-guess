@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Login</title>
+	<link rel="stylesheet" href="/form_page_style.css"/>
+	<script>
+		function showError(msg){
+			const elem = document.getElementById("error-message");
+			elem.innerHTML = msg;
+			elem.style.display = "block";
+		}
+		function hideError(){
+			document.getElementById("error-message").style.display = "none";
+		}
+		async function sendForm(event){
+			event.preventDefault();
+			const fd = new FormData(document.getElementById('login-form'));
+			hideError();
+
+			const response = await fetch("/login", {method:'POST', redirect:'follow', body:new URLSearchParams(fd)});
+			if(response.redirected){
+				window.location.href = response.url;
+				return;
+			}
+			showError(await response.text())
+
+			return false;
+		}
+		async function guestLogin(event){
+			hideError();
+			const response = await fetch("/login-guest", {method:'POST', redirect:'follow'});
+			if(response.redirected){
+				window.location.href = response.url;
+				return;
+			}
+			showError(await response.text())
+
+			return false;
+		}
+	</script>
+</head>
+<body>
+	<h3>Login</h3>
+	<form id="login-form" onsubmit="sendForm(event)">
+		<label for="username">Username</label><input name="username" id="username" type="text"/>
+		<label for="password">Password</label><input name="password" id="password" type="password"/>
+		<input type="submit" value="Log in" />
+		<div class="error-message" id="error-message">i get em</div>
+	</form>
+	<br>
+	<a onclick="guestLogin(event)" href="#">Or continue as a guest</a>
+	<br><br>
+	<a href="/register.html">Or register an account here</a>
+</body>
+</html>

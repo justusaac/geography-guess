@@ -1,0 +1,110 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maps</title>
+    <link rel="stylesheet" href="/form_page_style.css"/>
+    <style>
+        input[type="submit"]{
+            grid-column: span 1;
+        }
+        form{
+            width:auto;
+            grid-template-columns: 1fr max-content;
+        }
+        #form-results{
+            display:grid;
+            grid-template-columns: repeat(auto-fill, minmax(clamp(100%/4, 20em, 100%), auto));
+        }
+        .map-card{
+            border: 1px solid black;
+            border-radius:3px;
+            padding:3px;
+            margin:3px;
+            color:black;
+            text-decoration:none;
+            box-sizing:border-box;
+            background-color:#c9f2ff;
+        }
+        .map-description{
+            display:inline-block;
+            line-height:2.5ex;
+            height:7.5ex;
+            overflow-wrap:anywhere;
+            overflow:hidden;
+        }
+        #load-more{
+            padding:3px;
+            margin:3px;
+        }
+    </style>
+    <script>
+        function formatMap(info){
+            const root = document.createElement('a');
+            root.classList.add("map-card")
+            root.href=`/creategame/${info.mapid}`
+            const header = document.createElement('h3');
+            header.style.display="inline"
+            header.textContent = info.mapname
+            root.appendChild(header);
+            root.appendChild(document.createTextNode(` by ${info.username ?? "Unknown user"}`))
+            root.appendChild(document.createElement('hr'))
+            const description = document.createElement('span')
+            description.classList.add("map-description")
+            description.textContent = info.description
+            root.appendChild(description)
+            return root;
+        }   
+
+        const sendForm = (() => {
+            let prevQuery = "";
+            return async function(event){
+                event?.preventDefault();
+                const fd = new FormData(document.getElementById('search-form'));
+                if(fd.get("query") != prevQuery){
+                    prevQuery = fd.get("query");
+                    document.getElementById("pageinput").value = "0";
+                    document.getElementById("load-more").style.visibility = "visible";
+                    document.getElementById("form-results").innerHTML = "";
+                    return sendForm();
+                }
+                const response = await fetch("/maps", {method:'POST', body:new URLSearchParams(fd)});
+                if(response.redirected){
+                    window.location.href = response.url;
+                    return;
+                }
+                const maps = await response.json();
+                console.log(maps)
+                const layout = [];
+                for(const map of maps){
+                    layout.push(formatMap(map))
+                }
+                const elem = document.getElementById('form-results')
+                if(layout.length < fd.get("count")){
+                    document.getElementById('load-more').style.visibility="collapse"
+                    if(elem.children.length==0 && layout.length<0){
+                        layout.push(`No maps found`)
+                    }
+                }
+                elem.append(...layout);
+
+                const pageinput = document.getElementById("pageinput");
+                pageinput.value = parseInt(pageinput.value)+1;
+                return false;
+            }
+        })();
+    </script>
+</head>
+<body onload="sendForm()">
+    <form onsubmit="sendForm(event)" id="search-form">
+        <input type="text" placeholder="Map name" name="query">
+        <input type="hidden" name="count" value="20"/>
+        <input type="hidden" name="page" value="0" id="pageinput" autocomplete="off"/>
+        <input type="submit" value="Search">
+    </form>
+    <hr>
+    <div id="form-results"></div>
+    <button onclick="sendForm(event)" id="load-more">Load more maps</button>
+</body>
+</html>

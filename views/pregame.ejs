@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title><%= mapname %></title>
+	<style>
+		body{
+			font-family:sans-serif;
+		}
+		input, button{
+			margin:3px;
+		}
+		.startbutton{
+			font-size:1.5em;
+		}
+	</style>
+	<script>
+		async function copyLink(){
+			await navigator.clipboard.writeText(document.getElementById("challengelink").textContent);
+			document.getElementById("copybutton").textContent = "Copied"
+		}
+	</script>
+</head>
+<body>
+	<h3>Challenge on map <b><%= mapname %></b></h3>
+	Challenge link: <a id="challengelink" href="/createchallenge/<%= gameid %>">/createchallenge/<%= gameid %></a><button id="copybutton" onclick="copyLink()">Copy</button>
+	<form action="/game/<%= gameid %>">
+		<input type="submit" value="Start game" class="startbutton"/>
+	</form>
+	<script>
+		window.addEventListener('load', () => {
+			const elem = document.getElementById("challengelink");
+			elem.textContent = window.location.origin + elem.textContent;
+		})
+	</script>
+</body>
+</html>

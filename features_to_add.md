@@ -1,0 +1,2 @@
+- Scoring adjustment on smaller scale maps
+- User submitted maps

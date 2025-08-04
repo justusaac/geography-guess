@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title><%= mapname %></title>
+	<style>
+		body{
+			font-family:sans-serif;
+		}
+		input, select{
+			margin:3px;
+		}
+		.form-outline{
+			border: 1px solid black;
+			display:inline-block;
+			margin:5px;
+			padding:5px;
+		}
+	</style>
+	<script>
+		function setTimeInputActive(event){
+			for(const elem of [...document.getElementsByName('time_limit_minutes'), ...document.getElementsByName('time_limit_seconds')]){
+				elem.disabled = !event.target.checked
+			}
+		}
+	</script>
+</head>
+<body>
+	<h3>Create game on map <b><%= mapname %></b></h3>
+	<div><%= description %></div>
+	<br>
+	<span style="background-color:lavender;padding:3px;">Contains <%= locationcount %> locations</span>
+	<br><br>
+	<form method="post" id="new-game-form" action="/newgame/<%= mapid %>">
+		<div class="form-outline">
+			<select name="freedom">
+				<option value="moving" selected>Moving</option>
+				<option value="nm">No Moving</option>
+				<option value="nmpz">No Moving, Panning or Zooming</option>
+			</select>
+			<br>
+			<label for="time-limit-box">Time Limit </label><input type="checkbox" name="time_limit" id="time-limit-box" onchange="setTimeInputActive(event)"><input type="number" min="0" max="999" name="time_limit_minutes"> min <input type="number" min="0" max="59" name="time_limit_seconds"> sec 
+			<br>
+			<input type="submit" value="New game" />
+		</div>
+		<br>
+		<input type="checkbox" name="challenge" id="challenge-box"><label for="challenge-box">Challenge</label>
+	</form>
+	<script>
+		window.addEventListener('load', () => {
+			setTimeInputActive({target:document.getElementsByName("time_limit")[0]})
+		})
+	</script>
+</body>
+</html>
