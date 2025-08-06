@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const PROPERTIES = ["lat","lng","zoom","heading","pitch"];
 const BUFFER_SIZE = 8*(PROPERTIES.length);
 class MapFile{
@@ -26,6 +27,7 @@ class MapFile{
 
 	static async open(filename){
 		const instance = new MapFile();
+		await fs.promises.mkdir(path.dirname(filename), {recursive:true});
 		instance.fp = await fs.promises.open(filename, 'a+');
 		instance.writeStream = instance.fp.createWriteStream({encoding:'binary', start:(await instance.fp.stat()).size, flush:true});
 		return instance;
@@ -83,6 +85,50 @@ class MapFile{
 				this.write_loc(locs[i]);
 			}
 		}
+	}
+
+	async score_modifier(){
+		const new_bounds = ()=> {return {min:Infinity, max:-Infinity}};
+		const add_to_bounds = (bounds, val) => {
+			bounds.min = Math.min(bounds.min, val);
+			bounds.max = Math.max(bounds.max, val);
+		}
+		const loc_count = await this.location_count();
+		const lat_bounds = new_bounds();
+		const lng_quadrants = Array(4).fill().map(()=>false);
+		const lng_bounds_skipped_quadrants = Array(lng_quadrants.length).fill().map(new_bounds);
+		for(let i=0; i<loc_count; i++){
+			const loc = await this.read_loc(i);
+			const quadrant = Math.floor(((loc.lng+180)%360)/90);
+			lng_quadrants[quadrant] = true;
+			add_to_bounds(lat_bounds, loc.lat);
+			let found = false;
+			for(let skip=0; skip<lng_quadrants.length; skip++){
+				if(lng_quadrants[skip]){
+					continue;
+				}
+				found = true;
+				const lhs = skip*90 - 180;
+				const adjusted_lng = loc.lng + 360*(loc.lng<lhs);
+				add_to_bounds(lng_bounds_skipped_quadrants[skip], adjusted_lng);
+			}
+			if(!found){
+				return 1;
+			}
+		}
+		const lat_range = lat_bounds.max-lat_bounds.min;
+		if(lat_range>90 || lat_range<0){
+			return 1;
+		}
+		let lng_range = 180;
+		for(let i=0; i<lng_quadrants.length; i++){
+			if(lng_quadrants[i]){
+				continue;
+			}
+			const bounds = lng_bounds_skipped_quadrants[i]
+			lng_range = Math.min(lng_range, bounds.max-bounds.min);
+		}
+		return Math.max(lng_range/180, lat_range/90);
 	}
 
 	async close(){

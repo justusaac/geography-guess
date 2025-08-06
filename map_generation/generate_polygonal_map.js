@@ -7,6 +7,7 @@ const app = express();
 const path = require('path');
 const fs = require('fs');
 const {random_sample_polygon} = require(__dirname+"/../polygons.js");
+const {add_map_to_db} = require(__dirname+"/../db/add_maps_to_db.js");
 require('express-ws')(app);
 app.use(require('cors')());
 app.use(express.json())
@@ -24,7 +25,7 @@ const shutdown = async () => {
     const loc_count = await map.location_count();
     await map.close();
     console.log(`\ndone with ${filename}, now has ${loc_count} locations (added ${loc_count-initial_loc_count})`);
-
+    await add_map_to_db(filename);
 
 	process.exit()
 }

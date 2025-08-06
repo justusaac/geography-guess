@@ -33,7 +33,7 @@ async function getGame(id){
     if(!isFinite(id)){
         return null;
     }
-    const result = await db_pool.query('select Games.*, Maps.MapName, Maps.MapID from Games left join Maps on Games.MapID=Maps.MapID where GameID=$1::integer;', [id]);
+    const result = await db_pool.query('select Games.*, Maps.MapName, Maps.MapID, Maps.ScoreModifier from Games left join Maps on Games.MapID=Maps.MapID where GameID=$1::integer;', [id]);
     return result.rows[0];
 }
 async function backupGame(id, gameinfo){
@@ -94,8 +94,17 @@ app.post('/newgame/:id', require_auth, async (req,res) => {
         return res.redirect("/")
     }
     const map = await MapFile.open(filename);
-    const locations = await map.random_locs(5);
-    map.close();
+    let locations;
+    try{
+        locations = await map.random_locs(5);
+    }
+    catch(e){
+        console.log(filename,":",e)
+        return res.end("Map doesn't have enough locations")
+    }
+    finally{
+        map.close();
+    }
     const gameinfo = {
         locations,
         rules:{
@@ -168,7 +177,8 @@ app.ws("/gamesession/:id", async (ws, req) => {
     const game = {};
     const backup = async () => backupGame(gameId, game);
     const refresh = async () => {
-        const gameinfo = (await getGame(gameId))?.gameinfo;
+        const row = await getGame(gameId)
+        const gameinfo = row?.gameinfo;
         if(!gameinfo){
             ws.close(4004, "Game not found");
             return
@@ -177,12 +187,13 @@ app.ws("/gamesession/:id", async (ws, req) => {
     }
     await refresh();
     const tentative_guess = {};
+    const score_modifier = (await getGame(gameId)).scoremodifier;
     const process_guess = (guess,actual) => {
         let points = 0;
         let distance = 0;
         if(guess.lat != undefined && guess.lng != undefined){
             distance = great_circle_distance(guess, actual);
-            points = score(distance)
+            points = score(distance, score_modifier)
         }
         if(isNaN(points)){
             points = 0;
