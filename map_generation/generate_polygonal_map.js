@@ -6,16 +6,47 @@ const express = require('express');
 const app = express();
 const path = require('path');
 const fs = require('fs');
-const {random_sample_polygon} = require(__dirname+"/../polygons.js");
 const {add_map_to_db} = require(__dirname+"/../db/add_maps_to_db.js");
 require('express-ws')(app);
 app.use(require('cors')());
-app.use(express.json())
+app.use(express.json());
 ;(async ()=>{
 
-let desired_locations = process.argv[2] ?? 1000;
+const parameter_regexes = {
+	desired_locations: /^\d+$/,
+	boundaries: /.(geo)?js(on)?$/i,
+	filename: /.map$/i
+};
+const help_regex = /^-?-h(elp)?$/i;
+const parameters = {
+	desired_locations:1000,
+};
+next_arg: for(let i=2; i<process.argv.length; i++){
+	const arg = process.argv[i];
+	if(help_regex.test(arg)){
+		console.log(`
+Command line arguments are parsed based on matching a regex.
+${help_regex} : Prints this message and exits
+${parameter_regexes.desired_locations} : Number of locations to add (default ${parameters.desired_locations})
+${parameter_regexes.boundaries} : GeoJSON file with polygons to search (default entire world)
+${parameter_regexes.filename} : Output file location (default based on polygon file)
+		`)
+		process.exit(0);
+	}
+	for(const prop in parameter_regexes){
+		if(parameter_regexes[prop].test(arg)){
+			parameters[prop] = arg;
+			continue next_arg;
+		}
+	}
+	console.log(`Warning: unrecognized argument "${arg}" (try -h)`)
+}
 
-const filename = process.argv[4] ?? __dirname+"/../maps/"+path.basename(process.argv[3] ?? "world").split(".")[0]+".map"
+parameters.filename ??= path.join(__dirname,"..","maps",path.basename(parameters.boundaries ?? "world").split(".")[0]+".map");
+const {desired_locations, boundaries, filename} = parameters;
+
+
+
 const map = await MapFile.open(filename);
 
 const initial_loc_count = await map.location_count();
@@ -57,7 +88,7 @@ app.ws("/locationstream", (ws,req) => {
 const port_number = 8123
 
 app.listen(port_number, () => {
-	console.log(`Going to add ${desired_locations} locations to ${filename}`)
+	console.log(`Adding ${desired_locations} locations\n-from ${boundaries ?? "the entire world"}\n-to ${filename}`)
 })
 const startBrowserSearch = (() => {
 	const browsertextparts = [`
@@ -66,8 +97,8 @@ const startBrowserSearch = (() => {
 		const module = {};
 		${fs.readFileSync(__dirname+"/../polygons.js")};
 		const poly = ${
-			process.argv[3] 
-			? (fs.readFileSync(process.argv[3]))
+			boundaries
+			? (fs.readFileSync(boundaries))
 			: JSON.stringify([[[[180,-90],[180,90],[-180,90],[-180,-90],[180,-90]]]])
 		} 
 		const gen = random_sample_polygon(poly)
@@ -136,4 +167,5 @@ const startBrowserSearch = (() => {
 })();
 startBrowserSearch(desired_locations)
 
+//end async context
 })()

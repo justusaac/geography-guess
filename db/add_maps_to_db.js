@@ -9,6 +9,7 @@ const known_maps = {};
 const pool = new pg.Pool();
 
 const add_map_to_db = async (mappath) => {
+	mappath = path.resolve(mappath);
 	const name = path.basename(mappath).split(".")[0];
 	const title = known_maps[name]?.title || name;
 	const desc = known_maps[name]?.description || `Auto-generated map for ${title}`;

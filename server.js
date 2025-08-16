@@ -274,6 +274,7 @@ app.ws("/gamesession/:id", async (ws, req) => {
                     type:"game_results",
                     locations: game.locations,
                     guesses:game.guesses,
+                    username: req.session.passport.user.username
                 };
             },
 
@@ -352,6 +353,7 @@ app.ws("/gamesession/:id", async (ws, req) => {
             type:"game_results",
             locations: game.locations,
             guesses:game.guesses,
+            username: req.session.passport.user.username
         }
     })()));
 });
@@ -375,6 +377,7 @@ app.post("/register", (req, res) => {
         } catch(error) {
             res.end(({
                 '23505':'Username is already in use',
+                '22001':'Username is too long'
             }[error.code] ?? 'Unknown error occurred in registration'));
         }
     })
