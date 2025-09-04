@@ -161,7 +161,7 @@
     		padding-right:10px;
     	}
     	.game-results-bottom{
-    		text-align:center
+    		text-align:center;
     	}
     	.game-results-table *{
     		border: 1px solid gray;
@@ -171,8 +171,18 @@
     		display:inline-block;
     		font-family:sans-serif;
     		margin:5px;
+    		margin-bottom:0px;
     		padding:5px;
     		border-collapse:collapse;
+    	}
+    	.game-results-button{
+    		margin:5px;
+    		font-size:1em;
+    		a{
+    			padding:5px;
+    			text-decoration:none;
+    			color:black;
+    		}
     	}
     	.round-timer{
     		font-family:monospace;
@@ -610,7 +620,7 @@
 				return `hsl(${120 * score/5000}, 100%,50%)`;
 			}
 			static format_time(time, total_time){
-				let str = `${Math.floor(time/1000/60).toString().padStart(1,"0")}:${Math.floor(time/1000).toString().padStart(2,"0")}`;
+				let str = `${Math.floor(time/1000/60).toString().padStart(1,"0")}:${Math.floor((time/1000)%60).toString().padStart(2,"0")}`;
 				if(total_time){
 					str = str.padStart(MysteryPano.format_time(total_time).length, "0");
 				}
@@ -634,6 +644,10 @@
 				}));
 				this.add_to_map(new google.maps.marker.AdvancedMarkerElement({
 					position:guess.location,
+					content:new google.maps.marker.PinElement({
+						glyph:'?',
+						glyphColor:'white',
+					}).element,
 					zIndex:1,
 				}));
 
@@ -712,6 +726,10 @@
 						parts.push(`<td>${game_info.guesses[i].score} points<br>${MysteryPano.format_distance(game_info.guesses[i].distance)}<br>${MysteryPano.format_elapsed(game_info.guesses[i].elapsed)}</td>`);
 					}
 					parts.push(`<td><b style="border:none;">${total_score} points</b><br>${MysteryPano.format_elapsed(total_elapsed)}</td></tr></table>`);
+					parts.push('<br/>');
+					parts.push(`<button class="game-results-button"><a href="/creategame/${this.game_info.mapid}">Back</a></button>`);
+
+					parts.push(`<button class="game-results-button"><a href="/playagain/${MysteryPano.get_game_id()}">Play again</a></button>`);
 					container.innerHTML = parts.join('');
 				}
 			}

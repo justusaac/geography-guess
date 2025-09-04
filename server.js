@@ -79,6 +79,36 @@ async function check_duplicate_challenge (req, res, next) {
 app.get('/maps_api_key', require_auth, (req,res) => {
     res.end(process.env.MAPS_API_KEY)
 })
+async function create_game(res,mapid,userid,rules){
+    const map_result = await db_pool.query("select * from Maps where MapID=$1::int",[mapid])
+    const filename = map_result.rows[0]?.filename;
+    if(!filename){
+        res.redirect("/")
+        return null;
+    }
+    const map = await MapFile.open(filename);
+    let locations;
+    try{
+        locations = await map.random_locs(5);
+    }
+    catch(e){
+        console.log(filename,":",e)
+        res.end("Map doesn't have enough locations");
+        return null;
+    }
+    finally{
+        map.close();
+    }
+    const gameinfo = {
+        locations,
+        rules,
+        startTimes:Array(5),
+        guesses:Array(5),
+    }
+    const result = await db_pool.query("insert into Games (UserID, GameInfo, MapID) values ($1::integer, $2::jsonb, $3::integer) returning GameID;", [userid, gameinfo, mapid]);
+    const gameid = result.rows[0].gameid;
+    return gameid;
+}
 app.post('/newgame/:id', require_auth, async (req,res) => {
     let time_limit = req.body.time_limit==="on" && (
         1000*60*(Number(req.body.time_limit_minutes) || 0)
@@ -88,42 +118,36 @@ app.post('/newgame/:id', require_auth, async (req,res) => {
         time_limit = false;
     }
     const mapid = Number(req.params.id) || -1;
-    const map_result = await db_pool.query("select * from Maps where MapID=$1::int",[mapid])
-    const filename = map_result.rows[0]?.filename;
-    if(!filename){
-        return res.redirect("/")
+    const rules = {
+        moving:req.body.freedom==="moving",
+        zooming:req.body.freedom!=="nmpz",
+        panning:req.body.freedom!=="nmpz",
+        time_limit
+    };
+    const gameid = await create_game(res,mapid,req.session.passport.user.id,rules);
+    if(!gameid){
+        return;
     }
-    const map = await MapFile.open(filename);
-    let locations;
-    try{
-        locations = await map.random_locs(5);
-    }
-    catch(e){
-        console.log(filename,":",e)
-        return res.end("Map doesn't have enough locations")
-    }
-    finally{
-        map.close();
-    }
-    const gameinfo = {
-        locations,
-        rules:{
-            moving:req.body.freedom==="moving",
-            zooming:req.body.freedom!=="nmpz",
-            panning:req.body.freedom!=="nmpz",
-            time_limit
-        },
-        startTimes:Array(5),
-        guesses:Array(5),
-    }
-    const result = await db_pool.query("insert into Games (UserID, GameInfo, MapID) values ($1::integer, $2::jsonb, $3::integer) returning GameID;", [req.session.passport.user.id, gameinfo, mapid]);
-    const gameid = result.rows[0].gameid;
     if(req.body.challenge){
         res.redirect("/pregame/"+gameid);
     }
     else{
         res.redirect("/game/"+gameid);
     }
+});
+app.get("/playagain/:id", require_auth_game_id, async (req,res) => {
+    const game = await getGame(req.params.id);
+    if(!game){
+        return res.redirect("/");
+    }
+    const rules = game.gameinfo.rules;
+    const mapid = game.mapid;
+   
+    const gameid = await create_game(res,mapid,req.session.passport.user.id,rules);
+    if(!gameid){
+        return;
+    }
+    res.redirect("/game/"+gameid);
 });
 app.post("/challenge/:id", require_auth, check_duplicate_challenge, async (req, res) => {
     const challengeid = Number(req.params.id) || -1
@@ -316,16 +340,20 @@ app.ws("/gamesession/:id", async (ws, req) => {
             ws.send(response)
         }
     });
-    //Send current game state on connection
     if(!game.startTimes[0]){
         game.startTimes[0] = Date.now();
         backup();
     }
-    ws.send(JSON.stringify({
-        type:"game_info",
-        rules:game.rules,
-        mapname:(await getGame(gameId)).mapname
-    }));
+    //Send current game state on connection
+    {
+        const gameinfo = await getGame(gameId);
+        ws.send(JSON.stringify({
+            type:"game_info",
+            rules:game.rules,
+            mapname:gameinfo.mapname,
+            mapid:gameinfo.mapid
+        }));
+    }
     ws.send(JSON.stringify(check_time_limit() || (() => {
 
         let score_so_far = 0;
