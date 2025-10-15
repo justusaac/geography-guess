@@ -10,7 +10,6 @@ const {add_map_to_db} = require(__dirname+"/../db/add_maps_to_db.js");
 require('express-ws')(app);
 app.use(require('cors')());
 app.use(express.json());
-;(async ()=>{
 
 const parameter_regexes = {
 	desired_locations: /^\d+$/,
@@ -45,8 +44,8 @@ ${parameter_regexes.filename} : Output file location (default based on polygon f
 parameters.filename ??= path.join(__dirname,"..","maps",path.basename(parameters.boundaries ?? "world").split(".")[0]+".map");
 const {desired_locations, boundaries, filename} = parameters;
 
-
-
+;(async ()=>{
+	
 const map = await MapFile.open(filename);
 
 const initial_loc_count = await map.location_count();
@@ -132,7 +131,9 @@ const startBrowserSearch = (() => {
 					sources:[google.maps.StreetViewSource.GOOGLE],
 				}, (panoData, status)=>{
 					if(status===google.maps.StreetViewStatus.OK){
-						const gen1 = panoData.tiles.worldSize.width<4000
+						const gen1 = panoData.tiles.worldSize.width<4000;
+						//Option to block indian/s***cam coverage but not gen 2 (not fool proof)
+						const badcam = panoData.tiles.worldSize.height<=6656 && panoData.imageDate>="2021-09"
 						if(!gen1){
 							const loc = {
 								heading: Math.random()*360,

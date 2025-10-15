@@ -16,7 +16,8 @@
 	</style>
 </head>
 <body>
-	<h3>Challenge from <u><%=username%></u></h3>
+	<%- include('navheader'); %>
+	<h3>Challenge from <u><%=challenger%></u></h3>
 	<h4>Map: <%=mapname%></h4>
 	<b>Rules:</b><br>
 	<% for(const key of ["Moving","Panning","Zooming"]){ %>

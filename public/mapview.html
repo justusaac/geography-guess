@@ -162,6 +162,10 @@
     	}
     	.game-results-bottom{
     		text-align:center;
+    		max-height:50%;
+    		overflow-y:scroll;
+    		font-family:sans-serif;
+    		padding-top:5px;
     	}
     	.game-results-table *{
     		border: 1px solid gray;
@@ -170,8 +174,8 @@
     	.game-results-table{
     		display:inline-block;
     		font-family:sans-serif;
-    		margin:5px;
-    		margin-bottom:0px;
+    		margin-left:5px;
+    		margin-right:5px;
     		padding:5px;
     		border-collapse:collapse;
     	}
@@ -215,11 +219,53 @@
     		inherits:true;
     		initial-value:0;
     	}
-
+    	.username-pin:hover::after{
+    		content:var(--username);
+    		position:absolute;
+    		background-color:navajowhite;
+    		text-wrap:nowrap;
+    		padding:2px;
+    		border-radius:2px;
+    	}
+    	.error-popup{
+    		position:absolute;
+    		background-color:pink;
+    		top:15px;
+    		right:15px;
+    		z-index:7;
+    		padding:10px;
+    		border-radius:6px;
+    		max-width:300px;
+    		height:initial !important;
+    		transition:top 0.5s linear;
+    		display:flex;
+    	}
+    	.close-error{
+    		background:none;
+    		border:none;
+    		padding:3px;
+    		border-radius:3px;
+    		&:hover{
+    			background:rgba(0,0,0,0.1);
+    		}
+    	}
     </style>
 </head>
 <body>
 	<div id="game-container">
+		<span class="error-popup hidden">
+			<span>
+				<u>Error:</u>
+				<span class="error-message-container">No error!</span>
+				(try&nbsp;reloading)
+			</span>
+			<button class="close-error">
+				<svg height="15px" width="15px" viewBox="0 0 12 12">
+					<line x1="0" y1="0" x2="12" y2="12" stroke-width="2px" stroke="red"/>
+					<line x1="12" y1="0" x2="0" y2="12" stroke-width="2px" stroke="red"/>
+				</svg>
+			</button>
+		</span>
 		<div class="pano-container">
 			<div class="pano-container-real"></div>
 			<table class="game-info">
@@ -240,6 +286,7 @@
 			<div class="game-controls">
 				<button class="breadcrumb-return-btn">Follow breadcrumbs</button>
 				<button class="breadcrumb-start-btn">Leave breadcrumbs</button>
+				<button class="step-back-btn">Step back</button>
 				<button class="reset-pos-btn">Back to start</button>
 				<svg width="48" height="48" class="compass">
 					<circle cx="24" cy="24" r="24" fill="gray"/>
@@ -305,7 +352,7 @@
 				);
 				this.map.decor = [];
 				this.adjust_expanded_map(true);
-
+				this.socket.addEventListener("close", ()=>this.show_error("Websocket connection lost"));
 				this.socket.addEventListener("message", msg => {
 					//console.log(msg.data)
 					const data = JSON.parse(msg.data);
@@ -325,6 +372,7 @@
 						},
 						error:()=>{
 							console.error(data.message);
+							this.show_error(data.message);
 						},
 					}[data.type]());
 				})
@@ -337,6 +385,8 @@
 					["size-button decrease",this.adjust_expanded_map.bind(this, false)],
 					["breadcrumb-start-btn",this.place_breadcrumbs.bind(this)],
 					["breadcrumb-return-btn",this.follow_breadcrumbs.bind(this)],
+					["step-back-btn",this.step_back.bind(this)],
+					["close-error",this.hide_error.bind(this)]
 				]
 				for(const [classname, fn] of handlers){
 					for(const btn of this.root.getElementsByClassName(classname)){
@@ -443,6 +493,8 @@
 				this.switch_view('pano-container');
 				this.location = round_data.location;
 				this.round = round_data.round;
+				this.movement_history = [];
+				this.movement_history_with_pop = [];
 				this.pano=null;
 				if(!this.pano){
 					this.pano = new google.maps.StreetViewPanorama(
@@ -459,6 +511,7 @@
 						}
 					);
 					google.maps.event.addListener(this.pano, "pov_changed", this.pov_changed.bind(this));
+					google.maps.event.addListener(this.pano, "position_changed", this.position_changed.bind(this));
 
 				}
 				this.reset_pos()
@@ -538,9 +591,29 @@
 					}
 				}
 			}
+			step_back(){
+				if(this.movement_history_with_pop?.length>=2){
+					this.movement_history_with_pop.pop();
+					const new_pos = this.movement_history_with_pop.pop();
+					const position = {lat:this.pano.position.lat(), lng:this.pano.position.lng()};
+					this.pano.setPosition(new_pos);
+				}
+			}
 			pov_changed(){
 				for(const el of this.root.getElementsByClassName("compass")){
 					el.style.rotate = -this.pano.pov.heading+'deg';
+				}
+			}
+			position_changed(){
+				const position = {lat:this.pano.position.lat(), lng:this.pano.position.lng()};
+				for(const history of [this.movement_history_with_pop, this.movement_history]){
+					//Sometimes the event is emitted twice so we need de-duplication
+					if(position.lat!=history[history.length-1]?.lat || position.lng!=history[history.length-1]?.lng){
+						history.push(position);
+					}
+				}
+				for(const btn of this.root.getElementsByClassName('step-back-btn')){
+					btn.disabled = this.movement_history_with_pop?.length<2;
 				}
 			}
 			set_pov(heading){
@@ -578,6 +651,19 @@
 							break;
 						}
 					}
+				}
+			}
+			show_error(msg){
+				for(const elem of this.root.getElementsByClassName("error-popup")){
+					elem.classList.remove("hidden");
+				}
+				for(const elem of this.root.getElementsByClassName("error-message-container")){
+					elem.innerHTML = msg;
+				}
+			}
+			hide_error(){
+				for(const elem of this.root.getElementsByClassName("error-popup")){
+					elem.classList.add("hidden");
 				}
 			}
 			static format_distance(km){
@@ -626,7 +712,23 @@
 				}
 				return str;
 			}
-			add_guess_to_map(guess, actual, label='★'){
+			static get_color_from_string(str){
+				const a = 67676767;
+				const c = 676767;
+				const m = 2**31;
+				let x = 0;
+				for (let i=0; i<str.length; i++){
+					x+=str.charCodeAt(i);
+				}
+				x = (a*x+c)%m;
+				const hue = x%360;
+				x = (a*x+c)%m;
+				const saturation = 100-x%67;
+				x = (a*x+c)%m;
+				const lightness = 100-x%67;
+				return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+			}
+			add_guess_to_map(guess, actual, label='★', username=null){
 				const polyline_opts = {
 					path:[guess.location, actual],
 				    strokeColor: MysteryPano.get_color(guess.score),
@@ -634,6 +736,7 @@
 				    strokeWeight: 2,
 				    zIndex:3,
 				    geodesic:true,
+				    icons:[{icon:{path:google.maps.SymbolPath.FORWARD_CLOSED_ARROW,scale:2}}]
 				};
 				this.add_to_map(new google.maps.Polyline(polyline_opts));
 				this.add_to_map(new google.maps.Polyline({
@@ -641,13 +744,21 @@
 					strokeWeight:4,
 					strokeColor:'#000000',
 					zIndex:-1,
+					icons:polyline_opts.icons.map(x => {return {...x, icon:{...x.icon, strokeWeight:4}}})
 				}));
+				const question_element = new google.maps.marker.PinElement({
+					background: username ? MysteryPano.get_color_from_string(username) : undefined,
+					glyph:'?',
+					glyphColor:'white',
+				}).element;
+				if(username){
+					question_element.title = username;
+					question_element.style.setProperty("--username", '"'+username+'"');
+					question_element.classList.add("username-pin");
+				}
 				this.add_to_map(new google.maps.marker.AdvancedMarkerElement({
 					position:guess.location,
-					content:new google.maps.marker.PinElement({
-						glyph:'?',
-						glyphColor:'white',
-					}).element,
+					content:question_element,
 					zIndex:1,
 				}));
 
@@ -676,10 +787,24 @@
 					container.appendChild(this.map.getDiv());
 					this.map.fitBounds(MysteryPano.get_bounds(round_info.guess.location, round_info.actual));
 					this.add_guess_to_map(round_info.guess, round_info.actual);
+					if(this.game_info?.rules.moving){
+						//Sometimes the panos will be in slightly different position than expected so there will be movement history even if you didnt move
+						//So you can still get movement history without moving if the game allows moving
+						if(this.movement_history?.length > 1){
+							this.add_to_map(new google.maps.Polyline({
+								path:this.movement_history,
+								zIndex:0,
+								strokeWeight:1,
+								strokeColor:"red",
+								icons:[{icon:{path:google.maps.SymbolPath.FORWARD_OPEN_ARROW,scale:1}}]
+							}));
+						}
+					}
 				}
 				for(const elem of this.root.getElementsByClassName("round-results-message")){
 					elem.innerHTML =
-						`${round_info.guess.score} point${round_info.guess.score==1 ? '' : 's'}!
+						`Round ${round_info.round+1} results:<br>
+						${round_info.guess.score} point${round_info.guess.score==1 ? '' : 's'}!
 						<br>${ 
 						round_info.guess.distance==0 && round_info.guess.score==0 ? 
 						`You did not make a guess in time` : 
@@ -693,44 +818,123 @@
 					}
 				}
 			}
-			show_game_results(game_info){
-				this.switch_view('game-results-container');
+			add_results_to_map(guesses, locations, username=null, labels=null){
 				const bounds = {north:-90,south:90,east:-180,west:180};
-				for(let i=0; i<game_info.locations.length; i++){
-					this.add_guess_to_map(game_info.guesses[i], game_info.locations[i], (i+1).toString());
-					for(const loc of [game_info.guesses[i].location, game_info.locations[i]]){
+				for(let i=0; i<locations.length; i++){
+					this.add_guess_to_map(guesses[i], locations[i], (labels?.[i]??(i+1)).toString(), Array.isArray(username) ? username[i] : username);
+					for(const loc of [guesses[i].location, locations[i]]){
 						bounds.north = Math.max(bounds.north, loc.lat);
 						bounds.south = Math.min(bounds.south, loc.lat);
 						bounds.east = Math.max(bounds.east, loc.lng);
 						bounds.west = Math.min(bounds.west, loc.lng);
 					}
-					this.add_guess_to_map(game_info.guesses[i], game_info.locations[i], (i+1).toString());
 				}
+				this.map.fitBounds(bounds);
+			}
+			show_game_results(game_info){
+				this.switch_view('game-results-container');
 
 				for(const container of this.root.getElementsByClassName("game-results-map-container")){
 					container.appendChild(this.map.getDiv());
 				}
-				this.map.fitBounds(bounds);
+				const add_text_to_fragment = (txt,frag) => {
+					const tmp = document.createElement("template");
+					tmp.innerHTML = txt;
+					frag.append(tmp.content);
+				};
+				const all_players = Object.entries(
+					Object.keys(game_info.challengers??{}).length>0
+					? game_info.challengers 
+					: {[game_info.username]: game_info.guesses}
+				);
+				const showeverything = ()=>{
+					const round_count = game_info.locations.length;
+					const usernames = all_players.flatMap(x=>Array(round_count).fill(x[0]));
+					const rounds = all_players.flatMap(x=>x[1]);
+					const locations = rounds.map((x,i)=>game_info.locations[i%round_count]);
+					const labels = rounds.map((x,i)=>(i%round_count)+1);
+					this.clear_map();
+					this.add_results_to_map(rounds, locations, usernames, labels);
+				};
+				showeverything();
 				for(const container of this.root.getElementsByClassName("game-results-message")){
-					const parts = []
-					parts.push('<table class="game-results-table"><thead><tr><th>Player</th>');
-					for(let i=0; i<game_info.locations.length; i++){
-						parts.push(`<th>Round ${i+1}</th>`);
-					}
-					parts.push(`<th>Total</th></tr></thead><tr><td>${game_info.username}</td>`);
-					let total_score = 0;
-					let total_elapsed = 0;
-					for(let i=0; i<game_info.locations.length; i++){
-						total_score += game_info.guesses[i].score;
-						total_elapsed += game_info.guesses[i].elapsed;
-						parts.push(`<td>${game_info.guesses[i].score} points<br>${MysteryPano.format_distance(game_info.guesses[i].distance)}<br>${MysteryPano.format_elapsed(game_info.guesses[i].elapsed)}</td>`);
-					}
-					parts.push(`<td><b style="border:none;">${total_score} points</b><br>${MysteryPano.format_elapsed(total_elapsed)}</td></tr></table>`);
-					parts.push('<br/>');
-					parts.push(`<button class="game-results-button"><a href="/creategame/${this.game_info.mapid}">Back</a></button>`);
+					const base = new DocumentFragment();
 
-					parts.push(`<button class="game-results-button"><a href="/playagain/${MysteryPano.get_game_id()}">Play again</a></button>`);
-					container.innerHTML = parts.join('');
+					base.appendChild(document.createTextNode(`${
+						this.game_info?.rules.moving ? "Moving"
+						: this.game_info?.rules.zooming ? "No moving"
+						: "No move/pan/zoom"
+					} game`));
+					if(this.game_info?.rules.time_limit){
+						base.appendChild(document.createTextNode(`, ${
+							MysteryPano.format_time(this.game_info?.rules.time_limit)
+						} limit`));
+					}
+					base.appendChild(document.createElement('br'));
+
+					const table = document.createElement('table');
+					table.classList.add("game-results-table");
+					const header = document.createElement('thead');
+					const headerrow = document.createElement('tr');
+					add_text_to_fragment('<th>Player</th>', headerrow);
+					for(let i=0; i<game_info.locations.length; i++){
+						const roundheader = document.createElement('th');
+						roundheader.innerHTML = `Round ${i+1}`;
+						roundheader.style.cursor = "pointer";
+						roundheader.addEventListener('click', ()=>{
+							const usernames = all_players.map(x=>x[0]);
+							const rounds = all_players.map(x=>x[1][i]);
+							const locations = rounds.map(()=>game_info.locations[i]);
+							const labels = rounds.map(()=>i+1);
+							this.clear_map();
+							this.add_results_to_map(rounds, locations, usernames, labels);
+						});
+						headerrow.appendChild(roundheader);
+					}
+					const allroundheader = document.createElement('th');
+					allroundheader.innerHTML = "Total";
+					allroundheader.style.cursor = "pointer";
+					allroundheader.addEventListener('click', showeverything);
+					headerrow.appendChild(allroundheader);
+					header.appendChild(headerrow);
+					table.appendChild(header);
+					for(const [username, guesses] of all_players){
+						const row = document.createElement('tr');
+						const td = document.createElement('td');
+						td.style.backgroundColor = game_info.username==username ? "#fffab0" : "unset";
+						td.style.cursor = "pointer";
+						td.innerHTML = username;
+						td.addEventListener("click", () => {
+							this.clear_map();
+							this.add_results_to_map(guesses, game_info.locations, username)
+						});
+						row.appendChild(td);
+						let total_score = 0;
+						let total_elapsed = 0;
+						for(let i=0; i<game_info.locations.length; i++){
+							total_score += guesses[i].score;
+							total_elapsed += guesses[i].elapsed;
+							add_text_to_fragment(`<td>${guesses[i].score} points<br>${MysteryPano.format_distance(guesses[i].distance)}<br>${MysteryPano.format_elapsed(guesses[i].elapsed)}</td>`, row);
+						}
+						add_text_to_fragment(`<td><b style="border:none;">${total_score} points</b><br>${MysteryPano.format_elapsed(total_elapsed)}</td>`, row);
+						table.appendChild(row);
+					}
+					base.appendChild(table);
+					base.appendChild(document.createElement('br'));
+
+					if(!game_info.challengers){
+						const show_challengers = document.createElement("button");
+						show_challengers.innerHTML = "Show challengers"; 
+						show_challengers.addEventListener('click',()=>this.socket.send(JSON.stringify({type:"show_challengers"})));
+						base.appendChild(show_challengers);
+						base.appendChild(document.createElement('br'));
+					}
+
+					add_text_to_fragment(`<button class="game-results-button"><a href="/creategame/${this.game_info.mapid}">Back</a></button>`, base);
+
+					add_text_to_fragment(`<button class="game-results-button"><a href="/playagain/${MysteryPano.get_game_id()}">Play again</a></button>`, base);
+
+					container.replaceChildren(base);
 				}
 			}
 			static get_game_id(){

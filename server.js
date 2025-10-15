@@ -13,16 +13,21 @@ const bcrypt = require('bcrypt');
 const passport = require('passport');
 const LocalStrategy = require('passport-local');
 const crypto = require('crypto');
+const pg_session = require("connect-pg-simple")(session);
 
 const MapFile = require("./map_file_storage.js");
 const { score, great_circle_distance } = require("./scoring.js");
 
-app.use(cors());
+//app.use(cors());
 app.use(express.urlencoded());
 app.use(session({
+    store: new pg_session({
+        pool: db_pool,
+        createTableIfMissing:true,
+    }),
     resave:false,
     saveUninitialized:false,
-    secret:crypto.randomBytes(32),
+    secret:process.env.SESSION_SECRET || crypto.randomBytes(32),
 }));
 app.use(passport.authenticate('session'));
 app.use(express.static(__dirname+'/public'));
@@ -44,7 +49,10 @@ function require_auth(req, res, next) {
     if(req.isAuthenticated()){
         return next();
     }
-    res.redirect('/login.html');
+    res.redirect('/login.html?redirect='+encodeURIComponent(req.url));
+}
+function with_username(obj, req){
+    return {...obj, username: req?.session?.passport?.user?.username};
 }
 async function check_req_game_id(req){
     if(!req.isAuthenticated()){
@@ -59,16 +67,18 @@ async function check_req_game_id(req){
     return true;
 }
 async function require_auth_game_id (req, res, next) {
-    if(!await check_req_game_id(req)){
-        return res.redirect('/login.html');
-    }
-    next();
+    require_auth(req,res,async ()=>{
+        if(!await check_req_game_id(req)){
+            return res.render("forbidden", with_username({},req));
+        }
+        next();
+    });
 }
 async function check_duplicate_challenge (req, res, next) {
     const userId = req?.session?.passport?.user?.id;
     const challengeId = parseInt(req?.params?.id);
     if(!challengeId || !userId){
-        return res.redirect("/");
+        return res.redirect("/maplist");
     }
     const response = await db_pool.query("select GameID from Games where UserID=$1::int and (ChallengeID=$2::int or GameID=$2::int)", [userId, challengeId]);
     if(response.rows.length>0){
@@ -83,7 +93,7 @@ async function create_game(res,mapid,userid,rules){
     const map_result = await db_pool.query("select * from Maps where MapID=$1::int",[mapid])
     const filename = map_result.rows[0]?.filename;
     if(!filename){
-        res.redirect("/")
+        res.redirect("/maplist")
         return null;
     }
     const map = await MapFile.open(filename);
@@ -129,6 +139,7 @@ app.post('/newgame/:id', require_auth, async (req,res) => {
         return;
     }
     if(req.body.challenge){
+        db_pool.query("update Games set ChallengeID=$1::integer where GameID=$1::integer", [gameid]);
         res.redirect("/pregame/"+gameid);
     }
     else{
@@ -138,7 +149,7 @@ app.post('/newgame/:id', require_auth, async (req,res) => {
 app.get("/playagain/:id", require_auth_game_id, async (req,res) => {
     const game = await getGame(req.params.id);
     if(!game){
-        return res.redirect("/");
+        return res.redirect("/maplist");
     }
     const rules = game.gameinfo.rules;
     const mapid = game.mapid;
@@ -152,8 +163,8 @@ app.get("/playagain/:id", require_auth_game_id, async (req,res) => {
 app.post("/challenge/:id", require_auth, check_duplicate_challenge, async (req, res) => {
     const challengeid = Number(req.params.id) || -1
     const original_game = await db_pool.query("select * from Games where GameID=$1::int", [challengeid]);
-    if(original_game.rows.length == 0){
-        return res.redirect("/");
+    if(original_game.rows.length == 0 || original_game.rows[0].challengeid==null){
+        return res.redirect("/maplist");
     }
     const challenge_gameinfo = {
         ...original_game.rows[0].gameinfo,
@@ -169,23 +180,29 @@ app.post("/challenge/:id", require_auth, check_duplicate_challenge, async (req, 
 app.get("/creategame/:id", require_auth, async (req, res) => {
     const map = (await db_pool.query("select * from Maps where MapID=$1::int",[Number(req.params.id) || -1])).rows[0]
     if(!map){
-        res.redirect("/")
+        res.redirect("/maplist")
     }
-    res.render('creategame', map);
+    res.render('creategame', with_username(map, req));
 });
 app.get("/pregame/:id", require_auth_game_id, async (req, res) => {
     const game = await getGame(Number(req.params.id) || -1);
     if(!game){
-        res.redirect("/")
+        res.redirect("/maplist")
     }
-    res.render('pregame', game);
+    res.render('pregame', with_username(game, req));
 });
 app.get("/createchallenge/:id", require_auth, check_duplicate_challenge, async (req, res) => {
-    const original_game = await db_pool.query("select Games.GameID, Games.GameInfo, Maps.MapName, Users.UserName from Games left join Maps on Maps.MapID=Games.MapID left join Users on Users.UserID=Games.UserID where GameID=$1::int", [Number(req.params.id) || -1]);
+    const original_game = await db_pool.query("select Games.GameID, Games.GameInfo, Maps.MapName, Users.UserName as Challenger from Games left join Maps on Maps.MapID=Games.MapID left join Users on Users.UserID=Games.UserID where GameID=$1::int", [Number(req.params.id) || -1]);
     if(original_game.rows.length == 0){
-        return res.redirect("/");
+        return res.redirect("/maplist");
     }
-    res.render('createchallenge', original_game.rows[0]);
+    res.render('createchallenge', with_username(original_game.rows[0], req));
+});
+app.get("/maplist", require_auth, async(req, res) => {
+    res.render('maplist', with_username({},req));
+});
+app.get("/", require_auth, async(req, res) => {
+    res.render('maplist', with_username({},req));
 });
 
 app.get("/game/:id", require_auth_game_id, (req, res) => {
@@ -201,7 +218,7 @@ app.ws("/gamesession/:id", async (ws, req) => {
     const game = {};
     const backup = async () => backupGame(gameId, game);
     const refresh = async () => {
-        const row = await getGame(gameId)
+        const row = await getGame(gameId);
         const gameinfo = row?.gameinfo;
         if(!gameinfo){
             ws.close(4004, "Game not found");
@@ -256,6 +273,31 @@ app.ws("/gamesession/:id", async (ws, req) => {
             }
         }
     };
+    const get_game_results = () => {
+        return {
+            type:"game_results",
+            locations: game.locations,
+            guesses:game.guesses,
+            username: req.session.passport.user.username
+        }
+    };
+    const get_challengers = async () => {
+        const row = await getGame(gameId);
+        const challengeId = row.challengeid;
+        if(!challengeId){
+            return {};
+        }
+        const rows = (await db_pool.query("select Games.GameInfo, Users.Username from Games left join Users on Users.UserID=Games.UserID where Games.ChallengeID=$1::integer or Games.GameID=$1::integer", [challengeId])).rows;
+        const ans = {}
+        for(const row of rows){
+            const guesses = row.gameinfo.guesses;
+            //Only including completed challenges
+            if(guesses[guesses.length-1]){
+                ans[row.username] = guesses;
+            }
+        }
+        return ans;
+    };
     ws.on('message', async (msg) => {
         let data_;
         try{
@@ -268,7 +310,7 @@ app.ws("/gamesession/:id", async (ws, req) => {
         if(data?.type != "update_guess"){
             await refresh();
         }
-        const response = JSON.stringify(check_time_limit() || {
+        const response = JSON.stringify(check_time_limit() || await {
             //Keys based on data.type
             next_round:()=>{
                 let score_so_far = 0;
@@ -294,12 +336,15 @@ app.ws("/gamesession/:id", async (ws, req) => {
                     }
                     score_so_far += game.guesses[i].score;
                 }
-                return {
-                    type:"game_results",
-                    locations: game.locations,
-                    guesses:game.guesses,
-                    username: req.session.passport.user.username
-                };
+                return get_game_results();
+            },
+            show_challengers:async ()=>{
+                if(!game.guesses[game.guesses.length-1]){
+                    return;
+                }
+                const results = get_game_results();
+                results.challengers = await get_challengers();
+                return results;
             },
 
             update_guess:()=>{
@@ -377,12 +422,7 @@ app.ws("/gamesession/:id", async (ws, req) => {
             }
             score_so_far += game.guesses[i].score;
         }
-        return {
-            type:"game_results",
-            locations: game.locations,
-            guesses:game.guesses,
-            username: req.session.passport.user.username
-        }
+        return get_game_results();
     })()));
 });
 
@@ -448,7 +488,7 @@ app.post("/login", (req, res) => {
         res.end(msg);
     };
     passport.authenticate('local', {
-        successRedirect: '/index.html',
+        successRedirect: '/maplist',
         failureFlash:true,
     })(req,res);
 });
@@ -458,7 +498,7 @@ app.post("/login-guest", (req, res) => {
     };
     req.body = {username:" ",password:" "};
     passport.authenticate('local-guest', {
-        successRedirect: '/index.html',
+        successRedirect: '/maplist',
         failureFlash:true,
     })(req,res);
 });
@@ -469,6 +509,7 @@ app.get("/logout", (req, res, next) => {
     });
 });
 
-const server = app.listen(80, function () {
-    console.log('CORS-enabled web server listening on port 80')
+const port = process.env.PORT ?? 80;
+const server = app.listen(port, function () {
+    console.log(`Web server listening on port ${port}`)
 })

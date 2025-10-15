@@ -1,0 +1,19 @@
+<nav style="
+	width:100%;
+	border-bottom:1px solid gray;
+	padding:5px;
+	display:flex;
+	justify-content:space-between;
+">
+	<span>
+		<a href="/maplist">Maps</a>
+	</span>
+	<span>
+		<% if(username) { %>
+			<%= username %> | 
+			<a href="/logout">Log out</a>
+		<% } else { %>
+			<a href="/login.html">Log in</a>
+		<% } %>
+	</span>
+</nav>

@@ -14,14 +14,23 @@
 		function hideError(){
 			document.getElementById("error-message").style.display = "none";
 		}
+		function handleRedirect(response){
+			const params = new URLSearchParams(window.location.search);
+			const destination = params.get("redirect");
+			if(!destination){
+				window.location.href = response.url;
+				return;
+			}
+			window.location.href = decodeURIComponent(destination);
+		}
 		async function sendForm(event){
 			event.preventDefault();
 			const fd = new FormData(document.getElementById('login-form'));
 			hideError();
 
-			const response = await fetch("/login", {method:'POST', redirect:'follow', body:new URLSearchParams(fd)});
+			const response = await fetch("/login", {method:'POST', body:new URLSearchParams(fd)});
 			if(response.redirected){
-				window.location.href = response.url;
+				handleRedirect(response);
 				return;
 			}
 			showError(await response.text())
@@ -30,9 +39,9 @@
 		}
 		async function guestLogin(event){
 			hideError();
-			const response = await fetch("/login-guest", {method:'POST', redirect:'follow'});
+			const response = await fetch("/login-guest", {method:'POST'});
 			if(response.redirected){
-				window.location.href = response.url;
+				handleRedirect(response);
 				return;
 			}
 			showError(await response.text())

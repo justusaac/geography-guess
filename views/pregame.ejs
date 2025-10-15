@@ -24,6 +24,7 @@
 	</script>
 </head>
 <body>
+	<%- include('navheader'); %>
 	<h3>Challenge on map <b><%= mapname %></b></h3>
 	Challenge link: <a id="challengelink" href="/createchallenge/<%= gameid %>">/createchallenge/<%= gameid %></a><button id="copybutton" onclick="copyLink()">Copy</button>
 	<form action="/game/<%= gameid %>">

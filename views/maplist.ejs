@@ -75,7 +75,6 @@
                     return;
                 }
                 const maps = await response.json();
-                console.log(maps)
                 const layout = [];
                 for(const map of maps){
                     layout.push(formatMap(map))
@@ -97,6 +96,8 @@
     </script>
 </head>
 <body onload="sendForm()">
+    
+    <%- include('navheader'); %>
     <form onsubmit="sendForm(event)" id="search-form">
         <input type="text" placeholder="Map name" name="query">
         <input type="hidden" name="count" value="20"/>

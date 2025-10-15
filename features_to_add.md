@@ -1,2 +1,2 @@
 - User submitted maps
-- Better navigation
+- Duels
