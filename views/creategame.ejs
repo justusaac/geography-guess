@@ -18,7 +18,7 @@
 			margin:5px;
 			padding:5px;
 		}
-		input[type="submit"]{
+		.new-game{
 			font-size:1.5em;
 		}
 	</style>
@@ -47,10 +47,15 @@
 			<br>
 			<label for="time-limit-box">Time Limit </label><input type="checkbox" name="time_limit" id="time-limit-box" onchange="setTimeInputActive(event)"><input type="number" min="0" max="999" name="time_limit_minutes"> min <input type="number" min="0" max="59" name="time_limit_seconds"> sec 
 			<br>
-			<input type="submit" value="New game" />
+			<input type="submit" value="New game" class="new-game"/>
 		</div>
 		<br>
 		<input type="checkbox" name="challenge" id="challenge-box"><label for="challenge-box">Challenge</label>
+	</form>
+	<br/>
+	<form autocomplete="off" method="post"  action="/createduel/<%= mapid %>">
+		<input type="submit" value="Duel in <%= mapname %>">
+		</input>
 	</form>
 	<script>
 		window.addEventListener('load', () => {

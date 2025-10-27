@@ -40,12 +40,15 @@ class MapFile{
 	async location_count(){
 		return (await this.fp.stat()).size / BUFFER_SIZE;
 	}
-	async random_loc(){
+	async random_loc(seed){
+		seed ??= Math.floor(Math.random()*(2**31));
 		const loc_count = await this.location_count();
-		const chosen_loc = Math.floor(Math.random() * loc_count);
+		const chosen_loc = (new LCGenerator(seed).next())%loc_count;
 		return this.read_loc(chosen_loc);
 	}
-	async random_locs(n){
+	async random_locs(n,seed){
+		seed ??= Math.floor(Math.random()*(2**31));
+		const gen = new LCGenerator(seed);
 		const loc_count = await this.location_count();
 		if(n>loc_count){
 			throw new Error(`Not enough locations (${n}>${loc_count})`);
@@ -57,7 +60,7 @@ class MapFile{
 		const output = [];
 		const chosen_indices = [];
 		while(output.length<n){
-			let chosen_loc = Math.floor(Math.random() * (loc_count-output.length));
+			let chosen_loc = gen.next() % (loc_count-output.length);
 			for(let i=0; i<=chosen_indices.length; i++){
 				if(chosen_loc>=chosen_indices[i]){
 					chosen_loc++;
@@ -138,6 +141,7 @@ class MapFile{
 	}
 	async to_object(){
 		const output = [];
+		const loc_count = await this.location_count();
 		for(let i=0; i<loc_count; i++){
 			output.push(await this.read_loc(i));
 		}
@@ -157,6 +161,16 @@ class MapFile{
 		}
 		stream.write("]")
 		outfp.close()
+	}
+}
+
+class LCGenerator{
+	constructor(seed){
+		this.state = seed;
+	}
+	next(){
+		this.state = ((11882157 * this.state) + 67) % (2**31-1);
+		return this.state;
 	}
 }
 

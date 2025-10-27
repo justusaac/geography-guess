@@ -1,0 +1,199 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Duel lobby</title>
+	<style>
+		body{
+			font-family:sans-serif;
+		}
+		.rules-form{
+			border:1px solid black;
+			margin:5px;
+			padding:5px;
+			line-height:2em;
+		}
+		.room-content{
+			display:flex;
+			flex-direction:row;
+			flex-wrap:wrap;
+		}
+		input[readonly]{
+			background-color:gray;
+		}
+		.player-list-container{
+			border:1px solid black;
+			margin:5px;
+			padding:5px;
+		}
+		.error-container{
+			background-color: pink;
+			margin: 5px;
+			padding: 5px;
+		}
+		.start-button{
+			font-size: 1.5em;
+			margin:10px;
+		}
+	</style>
+	<script>
+		function update_rules(rules){
+			for(const suffix of ['','_after_guess']){
+				for(const elem of document.getElementsByName('time_limit'+suffix)){
+					elem.checked = (rules["time_limit"+suffix] != null);
+				}
+				for(const elem of [...document.getElementsByName('time_limit_minutes'+suffix), ...document.getElementsByName('time_limit_seconds'+suffix)]){
+					elem.readOnly = (rules["time_limit"+suffix] == null);
+				}
+				if(rules["time_limit"+suffix] != null){
+					for(const elem of document.getElementsByName('time_limit_minutes'+suffix)){
+						elem.value = Math.floor(rules["time_limit"+suffix]/1000/60)
+					}
+					for(const elem of document.getElementsByName('time_limit_seconds'+suffix)){
+						elem.value = Math.floor(rules["time_limit"+suffix]/1000%60)
+					}
+				}
+			}
+			for(const elem of document.getElementsByName('freedom')){
+				if(rules.moving){
+					elem.value = "moving"
+				}
+				else if(rules.zooming){
+					elem.value = "nm";
+				}
+				else{
+					elem.value = "nmpz";
+				}
+			}
+			for(const elem of document.getElementsByName("max_health")){
+				elem.value = rules.max_health;
+			}
+		}
+		function update_player_list(info){
+			const {owner, users} = info;
+			for(const root of document.getElementsByClassName("player-list")){
+				root.innerHTML = '';
+				for(const user of users){
+					const li = document.createElement('li');
+					li.textContent = user;
+					if(user === owner){
+						li.textContent += " (Owner)";
+					}
+					if(user === "<%= username %>"){
+						li.textContent += " (You)";
+					}
+					root.appendChild(li);
+				}
+			}
+			
+			for(const btn of document.getElementsByClassName("start-button")){
+				btn.disabled = (owner != "<%= username %>" || users.length<2);
+				btn.style.visibility = (owner != "<%= username %>") ? "hidden" : "visible";
+
+			}
+			for(const tag of ["input","select"]){
+				for(const elem of document.getElementById("rules-form").getElementsByTagName(tag)){
+					elem.disabled = (owner != "<%= username %>")
+				}
+			}
+
+		}
+		function show_error(err){
+			for(const elem of document.getElementsByClassName("error-container")){
+				elem.style.display = "block";
+			}
+			for(const elem of document.getElementsByClassName("error-message")){
+				elem.textContent = err.reason
+			}
+		}
+		async function copyLink(){
+			await navigator.clipboard.writeText(document.getElementById("challengelink").textContent);
+			for(const btn of document.getElementsByClassName("copybutton")){
+				btn.textContent = "Copied"
+			}
+		}
+	</script>
+</head>
+<body>
+	<%- include('navheader'); %>
+	<div style="display:none;" class="error-container">
+		Disconnected:
+		<div class="error-message"></div>
+		(try reloading)
+	</div>
+	<br>
+	Join link: <a id="challengelink" href="erm">erm</a> <button class="copybutton" onclick="copyLink()">Copy</button>
+	<br>
+	<div class="room-content">
+		<form class="rules-form" autocomplete="off" id="rules-form">
+			<select name="freedom">
+				<option value="moving" selected>Moving</option>
+				<option value="nm">No Moving</option>
+				<option value="nmpz">No Moving, Panning or Zooming</option>
+			</select>
+			<br>
+			<label for="time-limit-box">Time Limit </label><input type="checkbox" name="time_limit" id="time-limit-box"><input type="number" min="0" max="999" name="time_limit_minutes"> min <input type="number" min="0" max="59" name="time_limit_seconds"> sec 
+			<br>
+			<label for="time-limit-after-guess-box">Time Limit after guess </label><input type="checkbox" name="time_limit_after_guess" id="time-limit-after-guess-box"><input type="number" min="0" max="999" name="time_limit_minutes_after_guess"> min <input type="number" min="0" max="59" name="time_limit_seconds_after_guess"> sec 
+			<br>
+			<label for="max-health-input">Starting Health </label><input type="number" name="max_health" id="max-health-input" step="1000" min="0">
+		</form>
+		<span class="player-list-container">
+			<b>Players</b>
+			<ul class="player-list">
+			</ul>
+		</span>
+	</div>
+	<button disabled class="start-button">Start Duel</button>
+	<script>
+const path = window.location.pathname.split('/');
+const duelid = path[path.length-1];
+const url = "ws://"+window.location.host+"/duelroomsession/"+duelid;
+const socket = new WebSocket(url);
+socket.addEventListener("close", (evt)=>show_error(evt));
+socket.addEventListener("message", msg => {
+	console.log(msg.data)
+	const data = JSON.parse(msg.data);
+	const {type,info} = data;
+	if(type == "update_rules"){
+		update_rules(info);
+	}
+	else if(type == "update_player_list"){
+		update_player_list(info);
+	}
+	else if(type == "start_duel"){
+		window.location.replace("/duel/"+duelid);
+	}
+})
+const form = document.getElementById("rules-form");
+form.addEventListener('change',()=>{
+	const fd = Object.fromEntries((new FormData(form)).entries());
+	const info = {};
+	info.moving = (fd["freedom"]=="moving");
+	info.panning = (info.zooming = (fd["freedom"] != "nmpz"));
+	info.max_health = fd["max_health"]
+	for(const suffix of ['','_after_guess']){
+		info["time_limit"+suffix] = fd["time_limit"+suffix] 
+			? 1000 * ((parseInt(fd["time_limit_minutes"+suffix])||0)*60+(parseInt(fd["time_limit_seconds"+suffix])||0)) 
+			: null;
+	}
+	socket.send(JSON.stringify({
+		type:"update_rules",
+		info
+	}));
+});
+for(const btn of document.getElementsByClassName("start-button")){
+	btn.addEventListener("click", ()=>{
+		socket.send(JSON.stringify({type:"start_duel"}));
+	});
+}
+
+window.addEventListener('load', () => {
+	const elem = document.getElementById("challengelink");
+	elem.textContent = window.location.href;
+	elem.href = elem.textContent;
+})
+	</script>
+</body>
+</html>

@@ -4,7 +4,7 @@ module.exports = {
 		if(distance < 25/1000){
 			return 5000
 		}
-		const p = Math.E**(10/(modifier*2*EARTH_RADIUS));
+		const p = Math.E**(10/(modifier*Math.PI*EARTH_RADIUS));
 		return Math.round(
 			5000/(p**distance)
 		);

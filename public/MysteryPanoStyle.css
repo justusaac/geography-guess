@@ -1,0 +1,249 @@
+
+html,body{
+	margin:0;
+	padding:0;
+	height:100%;
+	width:100%;
+}
+#game-container{
+	width:100%;
+	height:100%;
+}
+.pano-container{
+	display:flex;
+	flex-direction:row;
+	align-items:end;
+	justify-content:space-between;
+	flex-wrap:wrap;
+	overflow:hidden;
+}
+.pano-container a{
+	display:none !important;
+}
+.pano-container-real{
+	height:100%;
+	width:100%;
+	position:absolute;
+}
+.pano-container-real *{
+	transition:none !important;
+	animation:none !important;
+}
+.reset-pos-btn{
+}
+.game-controls{
+	z-index:10;
+	position:relative;
+	display:flex;
+	flex-direction:column;
+	padding:3px;
+	align-items:start;
+}
+.game-info{
+	z-index:11;
+	color:white;
+	background-color: rgba(100,0,100,0.3);
+	margin-top:10px;
+	position:absolute;
+	top:0;
+	left:0;
+	padding:6px;
+	text-align:center;
+	font-family:sans-serif;
+	border-collapse:collapse;
+	border-radius: 0 5px 5px 0;
+}
+.game-info th, .game-info td{
+	padding:0px 10px 5px;
+}
+.game-info th:not(:first-child), .game-info td:not(:first-child) {
+
+	border-left:1px solid gray;
+}
+.game-info th{
+	padding-top:5px;
+}
+.compass{
+	margin:3px;
+}
+.button-and-map{
+	display:flex;
+	flex-direction:column;
+	z-index:11;
+    position: absolute;
+    inset: unset;
+
+    bottom: 5px;
+    right: 5px;
+	margin:15px;
+	--expanded-height:69%;
+	--expanded-width:69%;
+}
+
+.mobile-map-expander{
+	position:absolute;
+	height:100%;
+	width:100%;
+	z-index:11;
+	background-color:rgba(0,0,0,0);
+	border:none;
+}
+.button-and-map.expanded{
+	height:var(--expanded-height);
+	width:var(--expanded-width);
+	opacity:100%;
+	background-color:rgba(0,0,0,0.1);
+	.mobile-map-expander{
+		display:none;
+	}
+	.size-button-holder{
+		height:30px;
+	}
+}
+.button-and-map:not(.expanded){
+	transition-delay:.7s;
+	transition-duration:.15s;
+	transition-property: height, width, opacity, background-color;
+	height:30%;
+	width:20%;
+	opacity:25%;
+	.size-button-holder{
+		transition-delay:inherit;
+		transition-duration:inherit;
+		transition-property:height;
+		height:0px;
+	}
+}
+.map-container{
+	flex-grow:1;
+}
+.map-container *{
+	cursor:crosshair !important;
+}
+.size-button{
+	display:inline;
+	margin:3px;
+	margin-right:0px;
+	:hover{
+		filter:invert(90%);
+	}
+}
+.lock-in-button{
+	margin-top:5px;
+	line-height:300%;
+}
+.pano-container, .round-results-container,.game-results-container{
+	width:100%;
+	height:100%;
+}
+.hidden{
+	display:none !important;
+}
+.round-results-container,.game-results-container{
+	display:flex;
+	flex-direction:column;
+}
+.round-results-map-container,.game-results-map-container{
+	flex-grow:3;
+}
+.round-results-bottom{
+	text-align:center;
+	margin:5px;
+	font:20px sans-serif;
+}
+.next-round-button{
+	font:20px sans-serif;
+	padding:5px;
+	padding-left:10px;
+	padding-right:10px;
+}
+.game-results-bottom{
+	text-align:center;
+	max-height:50%;
+	overflow-y:scroll;
+	font-family:sans-serif;
+	padding-top:5px;
+}
+.game-results-table td, .game-results-table th{
+	border: 1px solid gray;
+	padding:4px;
+}
+
+.game-results-table{
+	display:inline-block;
+	font-family:sans-serif;
+	margin-left:5px;
+	margin-right:5px;
+	padding:5px;
+	border-collapse:collapse;
+}
+.game-results-button{
+	margin:5px;
+	font-size:1em;
+	a{
+		padding:5px;
+		text-decoration:none;
+		color:black;
+	}
+}
+.round-timer{
+	font-family:monospace;
+	position:absolute;
+	top:0;
+	left:0;
+	right:0;
+	width:fit-content;
+	z-index:7;
+	--timer-progress:0;
+	--timer-duration:0s;
+	--timer-message: "21";
+	transition: --timer-progress var(--timer-duration) linear;
+	background: linear-gradient(in hsl to left, white 0%, white calc(var(--timer-progress) * 100%), hsl(calc((1 - var(--timer-progress)) * 120deg) 100% 50%)  calc(var(--timer-progress) * 100%), red 100%);
+	color:white;
+	padding:10px 5px;
+	margin: 5px auto;
+	font-size:2.5em;
+	border-radius:20px;
+	&::after{
+		background:gray;
+		content:var(--timer-message);
+		border-radius:15px;
+		padding:5px 10px;
+	}
+}
+@property --timer-progress{
+	syntax:"<number>";
+	inherits:true;
+	initial-value:0;
+}
+.username-pin:hover::after{
+	content:var(--username);
+	position:absolute;
+	background-color:navajowhite;
+	text-wrap:nowrap;
+	padding:2px;
+	border-radius:2px;
+}
+.error-popup{
+	position:absolute;
+	background-color:pink;
+	top:15px;
+	right:15px;
+	z-index:7;
+	padding:10px;
+	border-radius:6px;
+	max-width:300px;
+	height:initial !important;
+	transition:top 0.5s linear;
+	display:flex;
+	z-index:67;
+}
+.close-error{
+	background:none;
+	border:none;
+	padding:3px;
+	border-radius:3px;
+	&:hover{
+		background:rgba(0,0,0,0.1);
+	}
+}

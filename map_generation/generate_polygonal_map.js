@@ -134,7 +134,7 @@ const startBrowserSearch = (() => {
 						const gen1 = panoData.tiles.worldSize.width<4000;
 						//Option to block indian/s***cam coverage but not gen 2 (not fool proof)
 						const badcam = panoData.tiles.worldSize.height<=6656 && panoData.imageDate>="2021-09"
-						if(!gen1){
+						if(gen1){
 							const loc = {
 								heading: Math.random()*360,
 								lat: panoData.location.latLng.lat(),

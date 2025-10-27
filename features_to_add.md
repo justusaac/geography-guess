@@ -1,2 +1,8 @@
 - User submitted maps
 - Duels
+	-more customization (different hp, multipliers, ...)
+	-open duel to public w/ browser
+- Use postgres large objects rather than local files
+- Use uuids rather than ints
+- Add full setup script for .env file and db initialization
+- Daily challenge

@@ -1,0 +1,393 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Duel</title>
+    <link rel="stylesheet" href="/MysteryPanoStyle.css"/>
+    <style>
+    	.health-bar{
+    		padding:3px;
+    		display:inline-block;
+    		width:7em;
+    		--max-health:10000;
+    		--current-health:67;
+    		counter-reset: maxhealth var(--max-health) currenthealth var(--current-health);
+    		--health-bg-color:hsl(min(calc(var(--current-health) / var(--max-health) * 200deg), 120deg) 100% 30%);
+    		background: linear-gradient( to right, var(--health-bg-color) 0%, var(--health-bg-color) calc(var(--current-health) / var(--max-health) * 100%), rgba(0,0,0,0.6) calc(var(--current-health) / var(--max-health) * 100%)) ;
+    		border: 1px solid #959595;
+    		border-radius:3px;
+    		transition: --current-health 2s ease-in-out 1.5s;
+    		&::after{
+    			content: counter(currenthealth) " / " counter(maxhealth);
+    			color:white;
+    		}
+    	}
+    	@property --max-health{
+			syntax:"<integer>";
+			inherits:true;
+			initial-value:0;
+		}
+    	@property --current-health{
+			syntax:"<integer>";
+			inherits:true;
+			initial-value:0;
+		}
+		.notransition{
+			transition: none !important;
+		}
+		.game-info td{
+			padding:3px;
+			padding-top:0px;
+		}
+		.game-info td:first-child{
+			text-align:right;
+		}
+		.game-info tr:first-child td{
+			padding-top:3px;
+		}
+    </style>
+</head>
+<body>
+	<div id="game-container">
+		<span class="error-popup hidden">
+			<span>
+				<u>Error:</u>
+				<span class="error-message-container">No error!</span>
+				(try&nbsp;reloading)
+			</span>
+			<button class="close-error">
+				<svg height="15px" width="15px" viewBox="0 0 12 12">
+					<line x1="0" y1="0" x2="12" y2="12" stroke-width="2px" stroke="red"/>
+					<line x1="12" y1="0" x2="0" y2="12" stroke-width="2px" stroke="red"/>
+				</svg>
+			</button>
+		</span>
+			<span class="round-timer hidden"></span>
+		<div class="pano-container">
+			<div class="pano-container-real"></div>
+			<table class="game-info">
+				<tbody class="health-container">
+					<!--tr>
+						<th>Map</th>
+						<th>Round</th>
+						<th>Score</th>
+					</tr>
+					<tr>
+						<td class="mapname-container"></td>
+						<td class="round-container"></td>
+						<td class="score-container"></td>
+					</tr-->
+				</tbody>
+			</table>
+			<div class="game-controls">
+				<button class="breadcrumb-return-btn">Follow breadcrumbs</button>
+				<button class="breadcrumb-start-btn">Leave breadcrumbs</button>
+				<button class="step-back-btn">Step back</button>
+				<button class="reset-pos-btn">Back to start</button>
+				<svg width="48" height="48" class="compass">
+					<circle cx="24" cy="24" r="24" fill="gray"/>
+					<polygon points="24,2 16,24 32,24" fill="red"/>		
+					<polygon points="24,46 16,24 32,24" fill="white"/>
+				</svg>
+			</div>
+			<div class="button-and-map">
+				<button class="mobile-map-expander"></button>
+				<div class="size-button-holder">
+					<svg class="size-button increase" width="24" height="24">
+						<symbol id="size-button-arrow">
+							<circle cx="12" cy="12" r="12" fill="white"/>
+							<polyline points="18,18 9,9" stroke="black" stroke-width="2px"/>
+							<polygon points="6,6 12,8 8,12" stroke="black"/>
+						</symbol>
+						<use href="#size-button-arrow"/>
+					</svg>
+					<svg class="size-button decrease" width="24" height="24" transform="rotate(180)">
+						<use href="#size-button-arrow"/>
+					</svg>
+				</div>
+				<div class="map-container">
+				</div>
+				<button class="lock-in-button">Get em</button>
+			</div>
+		</div>
+		<div class="round-results-container">
+			<div class="round-results-map-container">
+			</div>
+			<div class="round-results-bottom">
+				<div class="round-results-message"></div>
+				<!--button class="next-round-button">Next round</button-->
+			</div>
+		</div>
+		<div class="game-results-container">
+			<div class="game-results-map-container">
+			</div>
+			<div class="game-results-bottom">
+				<div class="game-results-message">
+				</div>
+			</div>
+		</div>
+	</div>
+	<script src="/MysteryPano.js"></script>
+	<script>
+		class DuelPano extends MysteryPano {
+			constructor(rootElem, socketURL){
+				super(rootElem, socketURL);
+				this.socket.addEventListener('message',console.log)
+				this.socket.addEventListener('message',(msg)=>{
+					const data = JSON.parse(msg.data);
+					if(data.type=="new_duel"){
+						const {new_id} = data;
+						const new_href = window.location.origin+"/duelroom/"+new_id
+						window.location.href = new_href;
+					}
+				})
+			}
+			static message_equal(a,b){
+				return a?.round===b?.round && a?.type===b?.type
+			}
+			show_pano(round_data){
+				const curr_msg = {round:round_data.round, type:"round"};
+				if(!DuelPano.message_equal(curr_msg,this.most_recent_msg)){
+					super.show_pano(round_data);
+					//Show "you" first
+					const user_order = Object.keys(round_data.health_before).sort((a,b)=>(b==this.game_info.you)-(a==this.game_info.you));
+					//Show current health levels
+					for(const elem of this.root.getElementsByClassName("health-container")){
+						elem.innerHTML = '';
+						for(const user of user_order){
+							const tr = document.createElement('tr');
+							const health = round_data.health_before[user];
+							const max_health = this.game_info.rules.max_health;
+							const td_name = document.createElement('td');
+							td_name.appendChild(document.createTextNode(`${user}${user==this.game_info.you ? " (You)":""}`));
+							tr.appendChild(td_name);
+							const td_health = document.createElement('td');
+							const health_bar = document.createElement('span');
+							health_bar.classList.add("health-bar","notransition");
+							health_bar.style.setProperty("--max-health", max_health);
+							health_bar.style.setProperty("--current-health", health);
+							td_health.appendChild(health_bar);
+							tr.appendChild(td_health);
+							elem.appendChild(tr)
+						}
+					}
+				}
+				this.most_recent_msg = curr_msg;
+				//Timer will be set to overall round timer however actual timer maybe shorter if someones already guessed
+            	const lock_in_time = Object.values(round_data.guesses).reduce((acc,curr)=>{
+            		if(!acc){
+            			return curr.final;
+            		}
+            		if(!curr.final){
+            			return acc;
+            		}
+            		return Math.min(acc,curr.final)
+            	}, false);
+            	console.log(lock_in_time);
+            	const now = Date.now();
+	            let time_left_normal = (this.game_info.rules.time_limit || Infinity)-(now-round_data.start_time);
+                let time_left_post_guess = (this.game_info.rules.time_limit_after_guess || Infinity)-(now-(lock_in_time || Infinity))
+            	if(time_left_post_guess<time_left_normal){
+					this.set_timer(lock_in_time, this.game_info.rules.time_limit_after_guess);
+				}
+				//Has the player already guessed or clicked around
+				const your_guess = round_data.guesses[this.game_info.you]
+				if(your_guess){
+					this.marker ??= new google.maps.marker.AdvancedMarkerElement();
+					this.add_to_map(this.marker);
+					this.marker.position = your_guess.location;
+
+					for(const btn of this.root.getElementsByClassName("lock-in-button")){
+						btn.disabled = Boolean(your_guess.final);
+					}
+				}
+			}
+			show_round_results(round_data){
+				const curr_msg = {round:round_data.round, type:"round_results"};
+				this.most_recent_msg = curr_msg;
+				this.switch_view('round-results-container');
+				for(const container of this.root.getElementsByClassName("round-results-map-container")){
+					container.appendChild(this.map.getDiv());
+				}
+				this.show_movement_history();
+
+				const max_score = Math.max(0, ...Object.values(round_data.guesses).map(x=>x.score));
+
+				const tables = [];
+				for(const elem of this.root.getElementsByClassName("round-results-message")){
+					elem.innerHTML = '';
+					const your_score = round_data.guesses[this.game_info.you]?.score || 0;
+					const span = document.createElement('span');
+					span.innerHTML = (your_score == max_score) ? `${your_score} points, you win this round!` : `You lost ${max_score-your_score} health.`
+					elem.appendChild(span);
+					elem.appendChild(document.createElement("br"));
+					const table = document.createElement("table");
+					table.classList.add("game-results-table");
+					elem.appendChild(table);
+					tables.push(table);
+				}
+				const guesses = [];
+				const usernames = [];
+				const labels = [];
+				//Show "you" first
+				const user_order = Object.keys(round_data.health_before).sort((a,b)=>(b==this.game_info.you)-(a==this.game_info.you));
+				for(const user of user_order){
+					const guess = round_data.guesses[user];
+					if(guess){
+						guesses.push(guess)
+						usernames.push(user);
+						labels.push(user==this.game_info.you ? '★' : "O");
+					}
+					for(const table of tables){
+
+						const health_before = round_data.health_before[user];
+						const max_health = this.game_info.rules.max_health;
+						const damage = Math.min(max_score-(guess?.score || 0), health_before);
+						const health_after = health_before - damage;
+						const tr = document.createElement('tr');
+						table.appendChild(tr);
+						tr.appendChild(document.createElement('td').appendChild(document.createTextNode(`${user}${user==this.game_info.you ? " (You)":""}`)).parentNode);
+						const points_td = document.createElement('td');
+						points_td.innerHTML = `${guess?.score || 0} points<br>${guess?.distance ? MysteryPano.format_distance(guess.distance) : "No guess"}`;
+						tr.appendChild(points_td);
+						const delta_td = document.createElement("td");
+						delta_td.innerHTML = `<span style="color:${damage>0 ? "red" : "green"}">${-damage}</span>`
+						tr.appendChild(delta_td);
+						const health_td = document.createElement('td');
+						tr.appendChild(health_td);
+						const health_bar = document.createElement('span');
+						health_td.appendChild(health_bar);
+						health_bar.classList.add("health-bar","notransition");
+						health_bar.style.setProperty("--max-health", max_health);
+						health_bar.style.setProperty("--current-health", health_before);
+						health_bar.offsetHeight;
+						health_bar.classList.remove("notransition");
+						health_bar.style.setProperty("--current-health", health_after);
+					}
+				}
+				if(Object.keys(round_data.guesses).length==0){
+					this.add_location_to_map(round_data.location, (round_data.round+1).toString());
+					this.map.panTo(round_data.location);
+					this.map.setZoom(6);
+				}
+				else{
+					this.add_results_to_map(guesses, Array(guesses.length).fill(round_data.location), usernames, labels, Array(guesses.length).fill((round_data.round+1).toString()));
+				}
+				//12 second time for viewing results(keep the same as the server)
+				this.set_timer(round_data.finish_time, 12000);
+			}
+			show_game_results(game_info){
+				this.switch_view('game-results-container');
+				this.clear_map();
+				for(const container of this.root.getElementsByClassName("game-results-map-container")){
+					container.appendChild(this.map.getDiv());
+				}
+				this.map.fitBounds(google.maps.LatLngBounds.MAX_BOUNDS);
+				const user_order = Object.keys(game_info.health_before[0]).sort((a,b)=>(b==this.game_info.you)-(a==this.game_info.you));
+				for(const container of this.root.getElementsByClassName("game-results-message")){
+					container.innerHTML = ""
+					const base = new DocumentFragment();
+					const table = document.createElement("table");
+					table.classList.add("game-results-table");
+					const header = document.createElement("thead");
+					header.appendChild(document.createElement("td"));
+					for(const player of user_order){
+						const th = document.createElement("th");
+						th.textContent = player;
+						th.colSpan = 2;
+						header.appendChild(th);
+					}
+					table.appendChild(header);
+					for(let i=0; i<game_info.health_before.length-1; i++){
+						const row = document.createElement('tr');
+						const roundno = document.createElement('td');
+						roundno.innerHTML = `Round ${i+1}`
+						row.appendChild(roundno);
+						const show_round_on_map = ()=>{
+							const guesses = [];
+							const label_guesses = [];
+							for(const player of user_order){
+								const guess = game_info.guesses[i][player];
+								guesses.push(guess);
+								label_guesses.push(player==this.game_info.you ? '★' : "O");
+							}
+							if(!guesses.reduce((acc,curr)=>acc||curr, false)){
+								this.add_location_to_map(game_info.locations[i], (i+1).toString());
+								this.map.panTo(game_info.locations[i]);
+								this.map.setZoom(6);
+							}
+							else{
+								this.add_results_to_map(guesses, Array(guesses.length).fill(game_info.locations[i]), user_order, label_guesses, Array(guesses.length).fill(i+1))
+							}
+						}
+						row.addEventListener("click", ()=>{
+							this.clear_map();
+							show_round_on_map();
+						});
+						row.style.cursor = "pointer";
+						for(const player of user_order){
+
+							const guess = game_info.guesses[i][player];
+							const td_points = document.createElement('td');
+							td_points.innerHTML = `
+								<span>
+									${guess?.score || 0} points
+									<br>
+									${guess?.distance ? MysteryPano.format_distance(guess.distance) : "No guess"}
+								</span>
+							`;
+							row.appendChild(td_points);
+							const td = document.createElement('td');
+							const health_before = game_info.health_before[i][player];
+							const health_after = game_info.health_before[i+1][player];
+							const delta = health_after-health_before;
+							if(health_after==0){
+								td.style.backgroundColor = "#FFCCCC"
+							}
+							else if(i+1==game_info.health_before.length-1){
+								td.style.backgroundColor = "#CCFFCC"
+								show_round_on_map();
+								const statusmsg = document.createElement("span");
+								statusmsg.style.fontSize = "1.5em";
+								statusmsg.innerHTML = (player==this.game_info.you) ? "Victory! You won." : "Defeat! You lost."
+								base.prepend(statusmsg, document.createElement("br"));
+							}
+							td.innerHTML = `
+								<span>
+									<span style="color:${delta<0 ? "red" : "green"}">${delta}</span>
+									<br>
+									<span style="font-size:1.2em">${health_after}</span>
+								</span>								
+							`;
+							row.appendChild(td);
+						}
+						table.appendChild(row);
+					}
+					base.appendChild(table);
+					base.appendChild(document.createElement("hr"));
+					const back_button = document.createElement("button");
+					back_button.classList.add("game-results-button");
+					back_button.innerHTML = `<a href="/creategame/${this.game_info.mapid}">Exit</a>`
+					base.appendChild(back_button);
+					if(this.game_info.you==this.game_info.owner){
+						const replay_button = document.createElement("button");
+						replay_button.classList.add("game-results-button");
+						replay_button.innerHTML = `<a href="/duelagain/${MysteryPano.get_game_id()}">Play again</a>`
+						base.appendChild(replay_button);
+					}
+					container.appendChild(base);
+				}
+			}
+		}
+	</script>
+	<script>
+		window.onMapsLoad = async ()=>{
+			const gameId = MysteryPano.get_game_id();
+			const url = "ws://"+window.location.host+"/duelsession/"+gameId;
+			window.debugpano = new DuelPano(document.getElementById("game-container"), url);
+		};
+	</script>
+	<script src="/load_maps_api.js"></script>
+</body>
+</html>
