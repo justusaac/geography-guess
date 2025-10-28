@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Settings</title>
+	<style>
+		body{
+			font-family:sans-serif;
+		}
+		input, button{
+			margin:3px;
+			padding:3px;
+		}
+	</style>
+</head>
+<body>
+	<%- include('navheader'); %>
+	<h3>Settings</h3>
+	<form id="imperial_preference">
+		<fieldset>
+			<legend>Preferred measurement units</legend>
+			<input type="radio" id="metric" name="imperial_preference" value="metric" />
+			<label for="metric">Metric (km, m)</label>
+			<br/>
+			<input type="radio" id="imperial" name="imperial_preference" value="imperial" />
+			<label for="imperial">Imperial (mi, ft)</label>
+		</fieldset>
+	</form>
+	<br>
+	<fieldset>
+		<legend>Google Maps API key</legend>
+		<input type="text" id="maps_api_key" placeholder="AIza..." size="38"/>
+		<button id="maps_api_key_save">Save</button>
+		<button id="maps_api_key_clear">Clear</button>
+		<br>
+		This key is only stored locally. If it is not set the game will try to use a key from the server.
+	</fieldset>
+	<script>
+window.addEventListener('load', () => {
+	const form = document.getElementById("imperial_preference");
+	const pref = localStorage.getItem("imperial_preference") || "metric";
+	form.imperial_preference.value = pref;
+	form.addEventListener("change", ()=>{
+		localStorage.setItem("imperial_preference", form.imperial_preference.value)
+	})
+
+	const maps_api_key = localStorage.getItem("maps_api_key")
+	const maps_api_key_input = document.getElementById("maps_api_key")
+	maps_api_key_input.value = maps_api_key;
+	const save_key = () => {
+		localStorage.setItem("maps_api_key", maps_api_key_input.value);
+	}
+	document.getElementById("maps_api_key_save").addEventListener("click", save_key);
+	document.getElementById("maps_api_key_clear").addEventListener("click", ()=>{
+		maps_api_key_input.value = ""
+	});
+
+})
+	</script>
+</body>
+</html>

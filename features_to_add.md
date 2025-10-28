@@ -1,4 +1,5 @@
 - User submitted maps
+- Settings page
 - Duels
 	-more customization (different hp, multipliers, ...)
 	-open duel to public w/ browser

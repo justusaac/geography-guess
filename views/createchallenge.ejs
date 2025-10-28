@@ -23,7 +23,7 @@
 	<% for(const key of ["Moving","Panning","Zooming"]){ %>
 		<%-`${key}: ${gameinfo.rules[key.toLowerCase()] ? '<span style="color:green;">Allowed</span>' : '<span style="color:red;">Not allowed</span>'}`%><br>
 	<% } %>
-	Time limit: <%=gameinfo.rules.time_limit ? ((limit) => limit<60000 ? `${limit/1000} seconds` : `${Math.floor(limit/1000/60)}:${(limit/1000%60).toString().padStart(2,"0")}`)(gameinfo.rules.time_limit) : "Unlimited"%>
+	Time limit: <%- gameinfo.rules.time_limit ? ('<span style="color:red;">'+((limit) => limit<60000 ? `${limit/1000} seconds` : `${Math.floor(limit/1000/60)}:${(limit/1000%60).toString().padStart(2,"0")}`)(gameinfo.rules.time_limit)+'</span>') : '<span style="color:green;">Unlimited</span>' %>
 	<br><br>
 	<form method="post" id="new-game-form" action="/challenge/<%= gameid %>">
 		<input type="submit" value="Accept challenge" />

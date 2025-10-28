@@ -133,7 +133,7 @@
 		class DuelPano extends MysteryPano {
 			constructor(rootElem, socketURL){
 				super(rootElem, socketURL);
-				this.socket.addEventListener('message',console.log)
+				//this.socket.addEventListener('message',console.log)
 				this.socket.addEventListener('message',(msg)=>{
 					const data = JSON.parse(msg.data);
 					if(data.type=="new_duel"){
@@ -184,7 +184,6 @@
             		}
             		return Math.min(acc,curr.final)
             	}, false);
-            	console.log(lock_in_time);
             	const now = Date.now();
 	            let time_left_normal = (this.game_info.rules.time_limit || Infinity)-(now-round_data.start_time);
                 let time_left_post_guess = (this.game_info.rules.time_limit_after_guess || Infinity)-(now-(lock_in_time || Infinity))

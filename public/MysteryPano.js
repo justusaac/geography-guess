@@ -413,11 +413,12 @@ class MysteryPano{
 			x+=str.charCodeAt(i);
 		}
 		x = (a*x+c)%m;
-		const hue = x%360;
+		//Dodge yellow as it is the correct location markers color
+		const hue = x%330 + (x%330>35)*30;
 		x = (a*x+c)%m;
-		const saturation = 100-x%67;
+		const saturation = 100-x%50;
 		x = (a*x+c)%m;
-		const lightness = 100-x%67;
+		const lightness = 70-x%40;
 		return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 	}
 	add_guess_to_map(guess, actual, label_guess = '?', label_actual='★', username=null){

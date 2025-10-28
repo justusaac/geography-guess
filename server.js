@@ -454,6 +454,11 @@ app.ws("/gamesession/:id", async (ws, req) => {
     })()));
 });
 
+const find_world_map = async ()=>{
+    const res = await db_pool.query("select Maps.MapID from Maps where lower(Maps.MapName)='world'");
+    return res.rows[0]?.mapid;
+}
+
 app.post('/maps', require_auth, async (req,res) => {
     const page = req.body.page ?? 0;
     const number = req.body.count ?? 20;
@@ -572,9 +577,16 @@ app.post("/createduel/:id", require_auth, async (req, res)=> {
     res.redirect(`/duelroom/${duelid}`);
 });
 
-
-app.get("/duelroom/:id", require_auth, (req,res)=>{
-    return res.render("duelroom", with_username({},req));
+app.get("/settings", require_auth, (req,res)=>{
+    return res.render("settings", with_username({},req));
+});
+app.get("/duelroom/:id", require_auth, async (req,res)=>{
+    const result = await db_pool.query("select Maps.MapName, Maps.MapID from Duels left join Maps on Maps.MapID=Duels.MapID where DuelID=$1::int", [req.params.id]);
+    if(!result.rows.length){
+        return res.redirect("/maplist");
+    }
+    const {mapid,mapname} = result.rows[0];
+    return res.render("duelroom", with_username({mapname,mapid},req));
 });
 app.ws("/duelroomsession/:id", async (ws,req) => {
     const duelId = parseInt(req.params.id);
@@ -716,8 +728,6 @@ app.ws("/duelsession/:id", async (ws, req) => {
     const duelId = parseInt(req.params.id);
 
     const client = new pg.Client();
-    client.on('error', (err)=>console.log("EPIC ERROR:",error));
-    client.on('end', (err)=>console.log("THE END"));
     await client.connect()
     ws.on('close',()=>client.end());
     await client.query('begin');
@@ -1023,6 +1033,57 @@ app.get("/duelagain/:id", require_auth, async (req,res) => {
     //Redirect other users in the original duel to the new one
     await db_pool.query(`select pg_notify($1::text, '{"type":"new_duel", "info":' || DuelID || '}') from Duels where DuelID=$2::integer`, [channelId, new_duelId]);
     res.redirect("/duelroom/"+new_duelId);
+});
+
+app.get("/dailychallenge", async (req,res)=>{
+    const worldmapid = await find_world_map();
+    if(worldmapid==null){
+        return res.end("World map not found");
+    }
+    const site_admin_user_id = -1;
+    const now = (await db_pool.query("select current_timestamp;")).rows[0].current_timestamp;
+    const existing = await db_pool.query("select ChallengeID from Games where UserID=$1::int and CreateTime::date=$2::date", [site_admin_user_id, now]);
+    const existing_row = existing.rows[0];
+    if(existing_row?.challengeid == null){
+        const map_result = await db_pool.query("select FileName from Maps where MapID=$1::int",[worldmapid])
+        const filename = map_result.rows[0]?.filename;
+        if(!filename){
+            return res.redirect("/maplist")
+        }
+        const map = await MapFile.open(filename);
+        let locations;
+        try{
+            locations = await map.random_locs(5);
+        }
+        catch(e){
+            console.log(filename,":",e)
+            return res.end("World map doesn't have enough locations");
+        }
+        finally{
+            map.close();
+        }
+        const rules = {
+            time_limit:120000,
+            moving:true,
+            panning:true,
+            zooming:true,
+        };
+        const gameinfo = {
+            locations,
+            rules,
+            startTimes:Array(5),
+            guesses:Array(5),
+        }
+        await db_pool.query(`insert into Games (UserID, GameInfo, MapID) select $1::integer, $2::jsonb, $3::integer where not exists(
+                select 67 from Games where UserID=$1::int and CreateTime::date=$4::date
+            )`,[site_admin_user_id, gameinfo, worldmapid, now]);
+        const result = await db_pool.query(`update games set ChallengeID=GameID where UserID=$1::int and CreateTime::date=$2::date returning ChallengeID;`, [site_admin_user_id, now]);
+        const new_challengeid = result.rows[0].challengeid;
+        res.redirect("/createchallenge/"+new_challengeid);
+    }
+    else{
+        res.redirect("/createchallenge/"+existing_row.challengeid);
+    }
 });
 
 
