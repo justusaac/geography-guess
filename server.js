@@ -224,7 +224,7 @@ app.get("/pregame/:id", require_auth_game_id, async (req, res) => {
     }
     res.render('pregame', with_username(game, req));
 });
-app.get("/createchallenge/:id", require_auth, check_duplicate_challenge, async (req, res) => {
+app.get("/challenge/:id", require_auth, check_duplicate_challenge, async (req, res) => {
     const original_game = await db_pool.query("select Games.GameID, Games.GameInfo, Maps.MapName, Users.UserName as Challenger from Games left join Maps on Maps.MapID=Games.MapID left join Users on Users.UserID=Games.UserID where GameID=$1::int", [Number(req.params.id) || -1]);
     if(original_game.rows.length == 0){
         return res.redirect("/maplist");
@@ -1081,10 +1081,10 @@ app.get("/dailychallenge", async (req,res)=>{
             )`,[site_admin_user_id, gameinfo, worldmapid, now]);
         const result = await db_pool.query(`update games set ChallengeID=GameID where UserID=$1::int and CreateTime::date=$2::date returning ChallengeID;`, [site_admin_user_id, now]);
         const new_challengeid = result.rows[0].challengeid;
-        res.redirect("/createchallenge/"+new_challengeid);
+        res.redirect("/challenge/"+new_challengeid);
     }
     else{
-        res.redirect("/createchallenge/"+existing_row.challengeid);
+        res.redirect("/challenge/"+existing_row.challengeid);
     }
 });
 

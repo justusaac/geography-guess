@@ -159,6 +159,10 @@ class MysteryPano{
 		this.switch_view('pano-container');
 		this.location = round_data.location;
 		this.round = round_data.round;
+		if(this.pano){
+			google.maps.event.clearListeners(this.pano, "pano_changed");
+			google.maps.event.clearListeners(this.pano, "position_changed");
+		}
 		this.movement_history = [];
 		this.movement_history_with_pop = [];
 		//this.pano=null;
@@ -185,21 +189,24 @@ class MysteryPano{
 						centerHeading:0,
 						tileSize:{width:100,height:100},
 						worldSize:{width:100,height:100},
-						getTileUrl:(pano,tz,tx,ty)=>{
-							return "https://placehold.co/100x100/000000/000000.png"
+						getTileUrl:(panoid,tz,tx,ty)=>{
+							if(panoid!="NOPANO"){
+								return null
+							}
+							return "/nopano.png"
 						}
 					}
 				};
 			},{cors:true});
 			google.maps.event.addListener(this.pano, "pov_changed", this.pov_changed.bind(this));
-			//In the pano_changed event the position will not be updated yet
-			//However if the original location is slightly off the shown pano the position_changed event will fire twice for the same pano with different positions
-			//The workaround is to only listen for position_changed events happening right after pano_changed events
-			google.maps.event.addListener(this.pano, "pano_changed", ()=>{
-				google.maps.event.addListenerOnce(this.pano, "position_changed", this.position_changed.bind(this))
-			});
-
+			
 		}
+		//In the pano_changed event the position will not be updated yet
+		//However if the original location is slightly off the shown pano the position_changed event will fire twice for the same pano with different positions
+		//The workaround is to only listen for position_changed events happening right after pano_changed events
+		google.maps.event.addListener(this.pano, "pano_changed", ()=>{
+			google.maps.event.addListenerOnce(this.pano, "position_changed", this.position_changed.bind(this))
+		});
 		this.reset_pos()
 		for(const btn of this.root.getElementsByClassName("breadcrumb-return-btn")){
 			btn.disabled = true
