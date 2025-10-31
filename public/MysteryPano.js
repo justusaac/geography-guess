@@ -190,7 +190,7 @@ class MysteryPano{
 						}
 					}
 				};
-			});
+			},{cors:true});
 			google.maps.event.addListener(this.pano, "pov_changed", this.pov_changed.bind(this));
 			//In the pano_changed event the position will not be updated yet
 			//However if the original location is slightly off the shown pano the position_changed event will fire twice for the same pano with different positions

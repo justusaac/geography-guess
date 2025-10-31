@@ -1056,13 +1056,13 @@ app.get("/dailychallenge", async (req,res)=>{
             locations = await map.random_locs(5);
         }
         catch(e){
-            console.log("Map",mapid,":",e)
+            console.log("Map",worldmapid,":",e)
             return res.end("World map doesn't have enough locations");
         }
         finally{
             map.close();
         }
-        const {scoremodifier} = (await db_pool.query("select ScoreModifier from Maps where MapID=$1::int",[mapid])).rows[0];
+        const {scoremodifier} = (await db_pool.query("select ScoreModifier from Maps where MapID=$1::int",[worldmapid])).rows[0];
         const rules = {
             time_limit:120000,
             moving:true,
