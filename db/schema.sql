@@ -9,8 +9,8 @@ create table Maps (
 	MapID serial primary key,
 	MapName varchar(64),
 	Description varchar(400),
-	FileName varchar(260) not null unique,
-	UserID int,
+	ObjectID int,
+	UserID int references Users(UserID) on delete cascade,
 	LocationCount int,
 	ScoreModifier double precision check (ScoreModifier > 0) default 1,
 	CreateTime timestamp not null default current_timestamp,
@@ -32,4 +32,6 @@ create table Duels (
 	MapID int references Maps(MapID) on delete cascade,
 	CreateTime timestamp not null default current_timestamp
 );
+
+
 

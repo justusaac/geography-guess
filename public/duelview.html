@@ -81,10 +81,12 @@
 				</tbody>
 			</table>
 			<div class="game-controls">
-				<button class="breadcrumb-return-btn">Follow breadcrumbs</button>
-				<button class="breadcrumb-start-btn">Leave breadcrumbs</button>
-				<button class="step-back-btn">Step back</button>
-				<button class="reset-pos-btn">Back to start</button>
+				<span>
+					<button class="movement-btn breadcrumb-return-btn">Follow breadcrumbs</button>
+					<button class="movement-btn breadcrumb-start-btn">Leave breadcrumbs</button>
+					<button class="movement-btn step-back-btn">Step back</button>
+					<button class="movement-btn reset-pos-btn">Back to start</button>
+				</span>
 				<svg width="48" height="48" class="compass">
 					<circle cx="24" cy="24" r="24" fill="gray"/>
 					<polygon points="24,2 16,24 32,24" fill="red"/>		
@@ -203,6 +205,7 @@
 				}
 			}
 			show_round_results(round_data){
+				this.pano?.setPano("NOPANO");
 				const curr_msg = {round:round_data.round, type:"round_results"};
 				this.most_recent_msg = curr_msg;
 				this.switch_view('round-results-container');
@@ -384,7 +387,7 @@
 		window.onMapsLoad = async ()=>{
 			const gameId = MysteryPano.get_game_id();
 			const url = "ws://"+window.location.host+"/duelsession/"+gameId;
-			window.debugpano = new DuelPano(document.getElementById("game-container"), url);
+			new DuelPano(document.getElementById("game-container"), url);
 		};
 	</script>
 	<script src="/load_maps_api.js"></script>

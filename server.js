@@ -16,10 +16,10 @@ const LocalStrategy = require('passport-local');
 const crypto = require('crypto');
 const pg_session = require("connect-pg-simple")(session);
 
-const MapFile = require("./map_file_storage.js");
-const { score, great_circle_distance } = require("./scoring.js");
+const MapFile = require(__dirname+"/map_file_storage.js");
+const { score, great_circle_distance } = require(__dirname+"/scoring.js");
 
-//app.use(cors());
+app.use(cors());
 app.use(express.urlencoded());
 app.use(session({
     store: new pg_session({
@@ -29,6 +29,9 @@ app.use(session({
     resave:false,
     saveUninitialized:false,
     secret:process.env.SESSION_SECRET || crypto.randomBytes(32),
+    cookie:{
+        maxAge:1000*60*60*24*7
+    }
 }));
 app.use(passport.authenticate('session'));
 app.use(express.static(__dirname+'/public'));
@@ -46,7 +49,7 @@ async function getDuel(id){
     if(!isFinite(id)){
         return null;
     }
-    const result = await db_pool.query('select Duels.*, Maps.MapName, Maps.MapID, Maps.ScoreModifier, Maps.FileName, OwnerUsers.Username as OwnerName, OpponentUsers.Username as OpponentName from Duels left join Maps on Duels.MapID=Maps.MapID left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on Duels.OpponentUserID=OpponentUsers.UserID where DuelID=$1::integer;', [id]);
+    const result = await db_pool.query('select Duels.*, Maps.MapName, Maps.MapID, Maps.ScoreModifier, OwnerUsers.Username as OwnerName, OpponentUsers.Username as OpponentName from Duels left join Maps on Duels.MapID=Maps.MapID left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on Duels.OpponentUserID=OpponentUsers.UserID where DuelID=$1::integer;', [id]);
     return result.rows[0];
 }
 async function backupGame(id, gameinfo){
@@ -119,18 +122,18 @@ app.get('/maps_api_key', require_auth, (req,res) => {
 })
 async function create_game(res,mapid,userid,rules){
     const map_result = await db_pool.query("select * from Maps where MapID=$1::int",[mapid])
-    const filename = map_result.rows[0]?.filename;
-    if(!filename){
+    mapid = map_result.rows[0]?.mapid;
+    if(!mapid){
         res.redirect("/maplist")
         return null;
     }
-    const map = await MapFile.open(filename);
+    const map = await MapFile.open(mapid);
     let locations;
     try{
         locations = await map.random_locs(5);
     }
     catch(e){
-        console.log(filename,":",e)
+        console.log("Map",mapid,":",e)
         res.end("Map doesn't have enough locations");
         return null;
     }
@@ -156,11 +159,13 @@ app.post('/newgame/:id', require_auth, async (req,res) => {
         time_limit = false;
     }
     const mapid = Number(req.params.id) || -1;
+    const {scoremodifier} = (await db_pool.query("select ScoreModifier from Maps where MapID=$1::int",[mapid])).rows[0];
     const rules = {
         moving:req.body.freedom==="moving",
         zooming:req.body.freedom!=="nmpz",
         panning:req.body.freedom!=="nmpz",
-        time_limit
+        time_limit,
+        scoremodifier
     };
     const gameid = await create_game(res,mapid,req.session.passport.user.id,rules);
     if(!gameid){
@@ -256,7 +261,7 @@ app.ws("/gamesession/:id", async (ws, req) => {
     }
     await refresh();
     const tentative_guess = {};
-    const score_modifier = (await getGame(gameId)).scoremodifier;
+    const score_modifier = (await getGame(gameId)).gameinfo.rules.scoremodifier;
     const process_guess = (guess,actual) => {
         let points = 0;
         let distance = 0;
@@ -454,8 +459,8 @@ app.ws("/gamesession/:id", async (ws, req) => {
     })()));
 });
 
-const find_world_map = async ()=>{
-    const res = await db_pool.query("select Maps.MapID from Maps where lower(Maps.MapName)='world'");
+const find_world_map = async (userid)=>{
+    const res = await db_pool.query("select Maps.MapID from Maps where lower(Maps.MapName)='world' and UserID=$1::int",[userid]);
     return res.rows[0]?.mapid;
 }
 
@@ -561,8 +566,7 @@ const create_duel = async (rules, userid, mapid) =>{
 app.post("/createduel/:id", require_auth, async (req, res)=> {
     const userid = req?.session?.passport?.user?.id;
     const mapid = Number(req.params.id) || -1;
-    //Just make sure the map exists
-    const map = (await db_pool.query("select * from Maps where MapID=$1::int",[mapid])).rows[0]
+    const map = (await db_pool.query("select ScoreModifier from Maps where MapID=$1::int",[mapid])).rows[0]
     if(!map){
         res.redirect("/maplist");
     }
@@ -572,7 +576,8 @@ app.post("/createduel/:id", require_auth, async (req, res)=> {
         zooming:true,
         time_limit:false,
         time_limit_after_guess:15000,
-        max_health:6000
+        max_health:6000,
+        scoremodifier:map.scoremodifier
     }, userid, mapid);
     res.redirect(`/duelroom/${duelid}`);
 });
@@ -605,7 +610,7 @@ app.ws("/duelroomsession/:id", async (ws,req) => {
         return;
     }
     await client.query("begin;")
-    const row = (await client.query("select Duels.*, OwnerUsers.Username as ownername, OpponentUsers.Username as opponentname,  Maps.MapName from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on Duels.OpponentUserID=OpponentUsers.UserID left join Maps on Maps.MapID=Duels.MapID where DuelID=$1::integer for update of Duels", [duelId])).rows[0];
+    const row = (await client.query("select Duels.*, OwnerUsers.Username as ownername, OpponentUsers.Username as opponentname,  Maps.MapName, Maps.ScoreModifier from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on Duels.OpponentUserID=OpponentUsers.UserID left join Maps on Maps.MapID=Duels.MapID where DuelID=$1::integer for update of Duels", [duelId])).rows[0];
     if(!row){
         ws.close(3001, "Duel not found");
         return;
@@ -682,8 +687,8 @@ app.ws("/duelroomsession/:id", async (ws,req) => {
                     panning:Boolean(info.panning),
                     time_limit:info.time_limit==null ? info.time_limit : Number(info.time_limit),
                     time_limit_after_guess:info.time_limit_after_guess==null ? info.time_limit_after_guess : Number(info.time_limit_after_guess),
-                    max_health: Math.abs(Number(info.max_health)) || 1
-
+                    max_health: Math.abs(Number(info.max_health)) || 1,
+                    scoremodifier:row.scoremodifier
                 };
                 await client.query("begin;");
                 await client.query("select 67 from Duels where DuelID=$1::int for update;", [duelId]);
@@ -733,7 +738,7 @@ app.ws("/duelsession/:id", async (ws, req) => {
     await client.query('begin');
     const duelrow = {}
     try{
-        const row = (await client.query('select Duels.*, Maps.MapName, Maps.MapID, Maps.ScoreModifier, Maps.FileName, OwnerUsers.Username as OwnerName, OpponentUsers.Username as OpponentName from Duels left join Maps on Duels.MapID=Maps.MapID left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on Duels.OpponentUserID=OpponentUsers.UserID where DuelID=$1::integer for update of Duels;', [duelId])).rows[0];
+        const row = (await client.query('select Duels.*, Maps.MapName, Maps.MapID, OwnerUsers.Username as OwnerName, OpponentUsers.Username as OpponentName from Duels left join Maps on Duels.MapID=Maps.MapID left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on Duels.OpponentUserID=OpponentUsers.UserID where DuelID=$1::integer for update of Duels;', [duelId])).rows[0];
         Object.assign(duelrow, row);
     }
     catch{
@@ -751,7 +756,7 @@ app.ws("/duelsession/:id", async (ws, req) => {
     }
 
 
-    const score_modifier = duelrow.scoremodifier;
+    const score_modifier = duelrow.duelinfo.rules.scoremodifier;
     const process_guess = (guess,actual) => {
         let points = 0;
         let distance = 0;
@@ -884,7 +889,7 @@ app.ws("/duelsession/:id", async (ws, req) => {
         }
         if(Object.values(duelinfo.health_before[round_idx]).reduce((acc,curr)=>acc+(curr>0), 0)>1){
             //If the game will end with this new round dont bother adding a location for it
-            const map = await MapFile.open(duelrow.filename);
+            const map = await MapFile.open(duelrow.mapid);
             const location = await map.random_loc();
             map.close();
             duelinfo.locations[round_idx] = location;
@@ -1036,37 +1041,34 @@ app.get("/duelagain/:id", require_auth, async (req,res) => {
 });
 
 app.get("/dailychallenge", async (req,res)=>{
-    const worldmapid = await find_world_map();
+    const site_admin_user_id = -1;
+    const worldmapid = await find_world_map(site_admin_user_id);
     if(worldmapid==null){
         return res.end("World map not found");
     }
-    const site_admin_user_id = -1;
     const now = (await db_pool.query("select current_timestamp;")).rows[0].current_timestamp;
     const existing = await db_pool.query("select ChallengeID from Games where UserID=$1::int and CreateTime::date=$2::date", [site_admin_user_id, now]);
     const existing_row = existing.rows[0];
     if(existing_row?.challengeid == null){
-        const map_result = await db_pool.query("select FileName from Maps where MapID=$1::int",[worldmapid])
-        const filename = map_result.rows[0]?.filename;
-        if(!filename){
-            return res.redirect("/maplist")
-        }
-        const map = await MapFile.open(filename);
+        const map = await MapFile.open(worldmapid);
         let locations;
         try{
             locations = await map.random_locs(5);
         }
         catch(e){
-            console.log(filename,":",e)
+            console.log("Map",mapid,":",e)
             return res.end("World map doesn't have enough locations");
         }
         finally{
             map.close();
         }
+        const {scoremodifier} = (await db_pool.query("select ScoreModifier from Maps where MapID=$1::int",[mapid])).rows[0];
         const rules = {
             time_limit:120000,
             moving:true,
             panning:true,
             zooming:true,
+            scoremodifier
         };
         const gameinfo = {
             locations,

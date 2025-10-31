@@ -176,6 +176,21 @@ class MysteryPano{
 					...this.get_pano_control_options()
 				}
 			);
+			this.pano.registerPanoProvider((id)=>{
+				if(id != "NOPANO"){
+					return null;
+				}
+				return {
+					tiles:{
+						centerHeading:0,
+						tileSize:1000,
+						worldSize:10000,
+						getTileUrl:(pano,tz,tx,ty)=>{
+							return "https://placehold.co/1000x1000"
+						}
+					}
+				};
+			});
 			google.maps.event.addListener(this.pano, "pov_changed", this.pov_changed.bind(this));
 			//In the pano_changed event the position will not be updated yet
 			//However if the original location is slightly off the shown pano the position_changed event will fire twice for the same pano with different positions
@@ -488,6 +503,7 @@ class MysteryPano{
 		}
 	}
 	show_round_results(round_info){
+		this.pano?.setPano("NOPANO");
 		this.switch_view('round-results-container');
 		for(const container of this.root.getElementsByClassName("round-results-map-container")){
 			container.appendChild(this.map.getDiv());
@@ -627,7 +643,7 @@ class MysteryPano{
 				base.appendChild(document.createElement('br'));
 			}
 
-			add_text_to_fragment(`<button class="game-results-button"><a href="/creategame/${this.game_info.mapid}">Back</a></button>`, base);
+			add_text_to_fragment(`<button class="game-results-button"><a href="/creategame/${this.game_info.mapid}">Exit</a></button>`, base);
 
 			add_text_to_fragment(`<button class="game-results-button"><a href="/playagain/${MysteryPano.get_game_id()}">Play again</a></button>`, base);
 

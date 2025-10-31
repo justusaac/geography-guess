@@ -6,15 +6,14 @@ const express = require('express');
 const app = express();
 const path = require('path');
 const fs = require('fs');
-const {add_map_to_db} = require(__dirname+"/../db/add_maps_to_db.js");
+const pg = require('pg');
 require('express-ws')(app);
 app.use(require('cors')());
 app.use(express.json());
 
 const parameter_regexes = {
 	desired_locations: /^\d+$/,
-	boundaries: /.(geo)?js(on)?$/i,
-	filename: /.map$/i
+	boundaries: /.(geo)?js(on)?$/i
 };
 const help_regex = /^-?-h(elp)?$/i;
 const parameters = {
@@ -28,7 +27,7 @@ Command line arguments are parsed based on matching a regex.
 ${help_regex} : Prints this message and exits
 ${parameter_regexes.desired_locations} : Number of locations to add (default ${parameters.desired_locations})
 ${parameter_regexes.boundaries} : GeoJSON file with polygons to search (default entire world)
-${parameter_regexes.filename} : Output file location (default based on polygon file)
+Anything else : Output map name (default based on polygon file)
 		`)
 		process.exit(0);
 	}
@@ -38,24 +37,31 @@ ${parameter_regexes.filename} : Output file location (default based on polygon f
 			continue next_arg;
 		}
 	}
-	console.log(`Warning: unrecognized argument "${arg}" (try -h)`)
+	parameters.mapname = arg;
 }
 
-parameters.filename ??= path.join(__dirname,"..","maps",path.basename(parameters.boundaries ?? "world").split(".")[0]+".map");
-const {desired_locations, boundaries, filename} = parameters;
+parameters.mapname ??= path.basename(parameters.boundaries ?? "World").split(".")[0];
+const {desired_locations, boundaries, mapname} = parameters;
 
 ;(async ()=>{
-	
-const map = await MapFile.open(filename);
+
+const client = new pg.Client();
+await client.connect();
+const site_admin_user_id = -1;
+let mapid = (await client.query("select MapID from Maps where UserID=$1::int and MapName=$2::text", [site_admin_user_id, mapname])).rows[0]?.mapid;
+if(!mapid){
+	mapid = await MapFile.create(mapname, `Auto-generated ${mapname} map`, site_admin_user_id);
+}
+const map = await MapFile.open(mapid, true);
 
 const initial_loc_count = await map.location_count();
 
 const shutdown = async () => {
 	console.log("\nShutting down")
     const loc_count = await map.location_count();
+    await map.update_metadata();
     await map.close();
-    console.log(`\ndone with ${filename}, now has ${loc_count} locations (added ${loc_count-initial_loc_count})`);
-    await add_map_to_db(filename);
+    console.log(`\ndone with ${mapname}, now has ${loc_count} locations (added ${loc_count-initial_loc_count})`);
 
 	process.exit()
 }
@@ -71,6 +77,9 @@ app.ws("/locationstream", (ws,req) => {
     		return startBrowserSearch(desired_locations-total_found_locations)
     	}
 		try{
+			if(!map.largeobject){
+				return;
+			}
 			map.write_loc(JSON.parse(msg));		
 			total_found_locations++
 			process.stdout.clearLine();
@@ -87,7 +96,7 @@ app.ws("/locationstream", (ws,req) => {
 const port_number = 8123
 
 app.listen(port_number, () => {
-	console.log(`Adding ${desired_locations} locations\n-from ${boundaries ?? "the entire world"}\n-to ${filename}`)
+	console.log(`Adding ${desired_locations} locations\n-from ${boundaries ?? "the entire world"}\n-to ${mapname}`)
 })
 const startBrowserSearch = (() => {
 	const browsertextparts = [`
@@ -134,7 +143,7 @@ const startBrowserSearch = (() => {
 						const gen1 = panoData.tiles.worldSize.width<4000;
 						//Option to block indian/s***cam coverage but not gen 2 (not fool proof)
 						const badcam = panoData.tiles.worldSize.height<=6656 && panoData.imageDate>="2021-09"
-						if(gen1){
+						if(!gen1){
 							const loc = {
 								heading: Math.random()*360,
 								lat: panoData.location.latLng.lat(),
