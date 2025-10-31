@@ -161,7 +161,7 @@ class MysteryPano{
 		this.round = round_data.round;
 		this.movement_history = [];
 		this.movement_history_with_pop = [];
-		this.pano=null;
+		//this.pano=null;
 		if(!this.pano){
 			this.pano = new google.maps.StreetViewPanorama(
 				this.root.querySelector('.pano-container-real'),
@@ -183,10 +183,10 @@ class MysteryPano{
 				return {
 					tiles:{
 						centerHeading:0,
-						tileSize:1000,
-						worldSize:10000,
+						tileSize:{width:100,height:100},
+						worldSize:{width:100,height:100},
 						getTileUrl:(pano,tz,tx,ty)=>{
-							return "https://placehold.co/1000x1000"
+							return "https://placehold.co/100x100/000000/000000.png"
 						}
 					}
 				};
