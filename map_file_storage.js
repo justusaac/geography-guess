@@ -1,5 +1,6 @@
 require('dotenv').config({path:__dirname+"/.env"});
 const pg = require('pg');
+const fs = require('fs');
 const {LargeObjectManager, LargeObject} = require('pg-large-object');
 
 const PROPERTIES = ["lat","lng","zoom","heading","pitch"];
@@ -191,11 +192,15 @@ class MapFile{
 		const stream = outfp.createWriteStream({flush:true});
 		const count = await this.location_count();
 		stream.write("[")
+		let comma = false;
 		for await(const loc of this.read_all_locs()){
-			stream.write(loc)
-			if(i+1<count){
+			if(comma){
 				stream.write(",")
 			}
+			else{
+				comma=true;
+			}
+			stream.write(JSON.stringify(loc))
 		}
 		stream.write("]")
 		outfp.close()
