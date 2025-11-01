@@ -10,4 +10,5 @@ if(!mapid){
 const map = await MapFile.open(mapid);
 await map.dump(outfilename);
 console.log(`dumped to ${outfilename}`);
+map.close();
 })();
