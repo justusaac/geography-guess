@@ -36,8 +36,13 @@
 			font-size: 1.5em;
 			margin:10px;
 		}
+		#team_count{
+			width:4em;
+		}
 	</style>
 	<script>
+		var global_teams;
+		var global_user_info;
 		function update_rules(rules){
 			for(const suffix of ['','_after_guess']){
 				for(const elem of document.getElementsByName('time_limit'+suffix)){
@@ -69,20 +74,65 @@
 			for(const elem of document.getElementsByName("max_health")){
 				elem.value = rules.max_health;
 			}
+			if(typeof rules.teams=='object' && rules.teams != null){
+				for(const elem of document.getElementsByName("teams")){
+					elem.checked = true;
+				}
+				for(const elem of document.getElementsByName("team_count")){
+					elem.readOnly = false;
+					elem.value = Object.keys(rules.teams).length;
+				}
+			}
+			else{
+				for(const elem of document.getElementsByName("teams")){
+					elem.checked = false;
+				}
+				for(const elem of document.getElementsByName("team_count")){
+					elem.readOnly = true;
+				}
+			}
+			global_teams = rules.teams;
+			if(global_user_info!=null){
+				update_player_list(global_user_info);
+			}
 		}
 		function update_player_list(info){
+			global_user_info = info;
 			const {owner, users} = info;
 			for(const root of document.getElementsByClassName("player-list")){
 				root.innerHTML = '';
 				for(const user of users){
 					const li = document.createElement('li');
-					li.textContent = user;
+					const txt = document.createTextNode('');
+					if(document.getElementById("team-box").checked){
+						txt.textContent += " ";
+						global_teams ??= {}
+						const select = document.createElement('select');
+						select.classList.add("team-selector");
+						select.dataset.user = user
+						const unassigned_option = document.createElement('option');
+						unassigned_option.value = "";
+						unassigned_option.innerHTML = "Unassigned"
+						select.appendChild(unassigned_option);
+						for(const team in global_teams){
+							const option = document.createElement('option');
+							option.value = team;
+							option.textContent = team;
+							select.appendChild(option);
+							if(global_teams[team].includes(user)){
+								select.value = team;
+							}
+						}
+						li.appendChild(select);
+					}
+					txt.textContent += user;
 					if(user === owner){
-						li.textContent += " (Owner)";
+						txt.textContent += " (Owner)";
 					}
 					if(user === "<%= username %>"){
-						li.textContent += " (You)";
+						txt.textContent += " (You)";
 					}
+					li.appendChild(txt);
 					root.appendChild(li);
 				}
 			}
@@ -128,8 +178,8 @@
 	<br>
 	Map: <a href="/creategame/<%=mapid%>"><b><%= mapname %></b></a>
 	<br>
-	<div class="room-content">
-		<form class="rules-form" autocomplete="off" id="rules-form">
+	<form class="room-content" autocomplete="off" id="rules-form">
+		<span class="rules-form">
 			<select name="freedom">
 				<option value="moving" selected>Moving</option>
 				<option value="nm">No Moving</option>
@@ -141,13 +191,15 @@
 			<label for="time-limit-after-guess-box">Time Limit after guess </label><input type="checkbox" name="time_limit_after_guess" id="time-limit-after-guess-box"><input type="number" min="0" max="999" name="time_limit_minutes_after_guess"> min <input type="number" min="0" max="59" name="time_limit_seconds_after_guess"> sec 
 			<br>
 			<label for="max-health-input">Starting Health </label><input type="number" name="max_health" id="max-health-input" step="1000" min="0">
-		</form>
+		</span>
 		<span class="player-list-container">
+			<label for="team-box">Teams</label><input type="checkbox" id="team-box" name="teams"><input type="number" min="2" name="team_count" id="team_count" value="2">
+			<br>
 			<b>Players</b>
 			<ul class="player-list">
 			</ul>
 		</span>
-	</div>
+	</form>
 	<button disabled class="start-button">Start Duel</button>
 	<script>
 const path = window.location.pathname.split('/');
@@ -170,7 +222,7 @@ socket.addEventListener("message", msg => {
 	}
 })
 const form = document.getElementById("rules-form");
-form.addEventListener('change',()=>{
+form.addEventListener('change',(evt)=>{
 	const fd = Object.fromEntries((new FormData(form)).entries());
 	const info = {};
 	info.moving = (fd["freedom"]=="moving");
@@ -180,6 +232,35 @@ form.addEventListener('change',()=>{
 		info["time_limit"+suffix] = fd["time_limit"+suffix] 
 			? 1000 * ((parseInt(fd["time_limit_minutes"+suffix])||0)*60+(parseInt(fd["time_limit_seconds"+suffix])||0)) 
 			: null;
+	}
+	if(fd["teams"]){
+		info.teams = {};
+		for(const elem of document.getElementsByClassName("team-selector")){
+			const {user} = elem.dataset;
+			for(const team of elem.options){
+				if(!team.value){
+					continue;
+				}
+				info.teams[team.value] ??= [];
+			}
+			if(elem.value){
+				info.teams[elem.value].push(user);
+			}
+		}
+		const team_count = Math.max(2,document.getElementById("team_count").value);
+		const team_name_set = new Set(Object.keys(info.teams));
+		for(let i=1; Object.keys(info.teams).length<team_count; i++){
+			const teamname = `Team ${i}`;
+			if(!team_name_set.has(teamname)){
+				info.teams[teamname] = []
+			}
+		}
+		while(Object.keys(info.teams).length>team_count){
+			delete info.teams[Object.keys(info.teams)[Object.keys(info.teams).length-1]]
+		}
+	}
+	else{
+		info.teams = null;
 	}
 	socket.send(JSON.stringify({
 		type:"update_rules",

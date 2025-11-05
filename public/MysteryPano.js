@@ -190,10 +190,7 @@ class MysteryPano{
 						tileSize:{width:100,height:100},
 						worldSize:{width:100,height:100},
 						getTileUrl:(panoid,tz,tx,ty)=>{
-							if(panoid!="NOPANO"){
-								return null
-							}
-							return "/nopano.png"
+							return null;
 						}
 					}
 				};
@@ -201,6 +198,7 @@ class MysteryPano{
 			google.maps.event.addListener(this.pano, "pov_changed", this.pov_changed.bind(this));
 			
 		}
+		this.pano.setVisible(true);
 		//In the pano_changed event the position will not be updated yet
 		//However if the original location is slightly off the shown pano the position_changed event will fire twice for the same pano with different positions
 		//The workaround is to only listen for position_changed events happening right after pano_changed events
@@ -230,6 +228,7 @@ class MysteryPano{
 						round:this.round,
 					}));
 				}
+				google.maps.event.clearListeners(this.map, "click");
 			}).bind(this);
 			btn.disabled = true;
 
@@ -427,8 +426,9 @@ class MysteryPano{
 		return str;
 	}
 	static get_color_from_string(str){
-		const a = 67676767;
-		const c = 676767;
+		//Numbers carefully manipulated so Team 1, 2, 3 are red, blue, green
+		const a = 6676767;
+		const c = 6671000;
 		const m = 2**31;
 		let x = 0;
 		for (let i=0; i<str.length; i++){
@@ -443,7 +443,7 @@ class MysteryPano{
 		const lightness = 70-x%40;
 		return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 	}
-	add_guess_to_map(guess, actual, label_guess = '?', label_actual='★', username=null){
+	add_round_to_map(guess, actual, label_guess = '?', label_actual='★', username=null, teamname=null){
 		const polyline_opts = {
 			path:[guess.location, actual],
 		    strokeColor: MysteryPano.get_color(guess.score),
@@ -461,8 +461,12 @@ class MysteryPano{
 			zIndex:-1,
 			icons:polyline_opts.icons.map(x => {return {...x, icon:{...x.icon, strokeWeight:4}}})
 		}));
+		this.add_guess_to_map(guess,label_guess,username, teamname);
+		this.add_location_to_map(actual, label_actual);
+	}
+	add_guess_to_map(guess, label_guess, username=null, teamname=null){
 		const question_element = new google.maps.marker.PinElement({
-			background: username ? MysteryPano.get_color_from_string(username) : undefined,
+			background: teamname ? MysteryPano.get_color_from_string(teamname) : username ? MysteryPano.get_color_from_string(username) : undefined,
 			glyphText:label_guess,
 			glyphColor:'white',
 		}).element;
@@ -476,7 +480,6 @@ class MysteryPano{
 			content:question_element,
 			zIndex:1,
 		}));
-		this.add_location_to_map(actual, label_actual);
 	}
 	add_location_to_map(actual, label_actual){
 		const anchor = document.createElement('a');
@@ -516,7 +519,7 @@ class MysteryPano{
 			container.appendChild(this.map.getDiv());
 		}
 		this.map.fitBounds(MysteryPano.get_bounds(round_info.guess.location, round_info.actual));
-		this.add_guess_to_map(round_info.guess, round_info.actual);
+		this.add_round_to_map(round_info.guess, round_info.actual);
 		this.show_movement_history();
 		for(const elem of this.root.getElementsByClassName("round-results-message")){
 			elem.innerHTML =
@@ -535,13 +538,13 @@ class MysteryPano{
 			}
 		}
 	}
-	add_results_to_map(guesses, locations, username=null, label_guesses = null, label_locations=null){
+	add_results_to_map(guesses, locations, username=null, label_guesses = null, label_locations=null, teamname=null){
 		const bounds = {north:-90,south:90,east:-180,west:180};
 		for(let i=0; i<locations.length; i++){
 			if(!guesses[i]){
 				continue;
 			}
-			this.add_guess_to_map(guesses[i], locations[i], label_guesses?.[i], (label_locations?.[i]??(i+1)).toString(), Array.isArray(username) ? username[i] : username);
+			this.add_round_to_map(guesses[i], locations[i], label_guesses?.[i], (label_locations?.[i]??(i+1)).toString(), Array.isArray(username) ? username[i] : username, Array.isArray(teamname) ? teamname[i] : teamname);
 			for(const loc of [guesses[i].location, locations[i]]){
 				bounds.north = Math.max(bounds.north, loc.lat);
 				bounds.south = Math.min(bounds.south, loc.lat);

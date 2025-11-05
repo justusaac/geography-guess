@@ -68,16 +68,6 @@
 			<div class="pano-container-real"></div>
 			<table class="game-info">
 				<tbody class="health-container">
-					<!--tr>
-						<th>Map</th>
-						<th>Round</th>
-						<th>Score</th>
-					</tr>
-					<tr>
-						<td class="mapname-container"></td>
-						<td class="round-container"></td>
-						<td class="score-container"></td>
-					</tr-->
 				</tbody>
 			</table>
 			<div class="game-controls">
@@ -110,7 +100,7 @@
 				</div>
 				<div class="map-container">
 				</div>
-				<button class="lock-in-button">Get em</button>
+				<button class="lock-in-button">Guess</button>
 			</div>
 		</div>
 		<div class="round-results-container">
@@ -118,7 +108,6 @@
 			</div>
 			<div class="round-results-bottom">
 				<div class="round-results-message"></div>
-				<!--button class="next-round-button">Next round</button-->
 			</div>
 		</div>
 		<div class="game-results-container">
@@ -150,19 +139,20 @@
 			}
 			show_pano(round_data){
 				const curr_msg = {round:round_data.round, type:"round"};
+				const you_team = Object.keys(this.game_info.rules.teams).filter(t=>this.game_info.rules.teams[t].includes(this.game_info.you))[0];
 				if(!DuelPano.message_equal(curr_msg,this.most_recent_msg)){
 					super.show_pano(round_data);
 					//Show "you" first
-					const user_order = Object.keys(round_data.health_before).sort((a,b)=>(b==this.game_info.you)-(a==this.game_info.you));
+					const team_order = Object.keys(round_data.health_before).sort((a,b)=>(b==you_team)-(a==you_team));
 					//Show current health levels
 					for(const elem of this.root.getElementsByClassName("health-container")){
 						elem.innerHTML = '';
-						for(const user of user_order){
+						for(const team of team_order){
 							const tr = document.createElement('tr');
-							const health = round_data.health_before[user];
+							const health = round_data.health_before[team];
 							const max_health = this.game_info.rules.max_health;
 							const td_name = document.createElement('td');
-							td_name.appendChild(document.createTextNode(`${user}${user==this.game_info.you ? " (You)":""}`));
+							td_name.appendChild(document.createTextNode(`${team}${team==you_team ? " (You)":""}`));
 							tr.appendChild(td_name);
 							const td_health = document.createElement('td');
 							const health_bar = document.createElement('span');
@@ -172,6 +162,13 @@
 							td_health.appendChild(health_bar);
 							tr.appendChild(td_health);
 							elem.appendChild(tr)
+						}
+					}
+					if(round_data.health_before[you_team]<=0){
+						google.maps.event.clearListeners(this.map, "click");
+						for(const elem of this.root.getElementsByClassName("lock-in-button")){
+							elem.disabled = true;
+							elem.innerHTML = "You&nbsp;are&nbsp;eliminated";
 						}
 					}
 				}
@@ -193,15 +190,47 @@
 					this.set_timer(lock_in_time, this.game_info.rules.time_limit_after_guess);
 				}
 				//Has the player already guessed or clicked around
+				//over complicated system to avoid clearing map and flashing unchanged markers
 				const your_guess = round_data.guesses[this.game_info.you]
 				if(your_guess){
-					this.marker ??= new google.maps.marker.AdvancedMarkerElement();
-					this.add_to_map(this.marker);
+					if(!this.marker){
+						this.marker = new google.maps.marker.AdvancedMarkerElement();
+						this.add_to_map(this.marker);
+					}
 					this.marker.position = your_guess.location;
 
 					for(const btn of this.root.getElementsByClassName("lock-in-button")){
 						btn.disabled = Boolean(your_guess.final);
 					}
+				}
+				//show teammate guesses on the map
+				this.team_markers ??= []
+				let marker_idx = 0;
+				for(let i=0; i<this.game_info.rules.teams[you_team].length; i++){
+					const player = this.game_info.rules.teams[you_team][i]
+					if(player==this.game_info.you){
+						continue;
+					}
+					const player_guess = round_data.guesses[player]
+					if(!player_guess){
+						continue;
+					}
+					if(!this.team_markers[marker_idx]){
+						const pin_element = new google.maps.marker.PinElement({
+							background:"lightblue"
+						}).element;
+						const marker = new google.maps.marker.AdvancedMarkerElement({position:player_guess.location, content:pin_element})
+
+						this.team_markers.push(marker);
+					}
+					const marker = this.team_markers[marker_idx]
+					marker.content.style.opacity = player_guess.final ? "70%" : "30%";
+					marker.position = player_guess.location;
+					this.add_to_map(marker);
+					marker_idx++;
+				}
+				while(this.team_markers.length>marker_idx){
+					this.team_markers.pop().setMap(null);
 				}
 			}
 			show_round_results(round_data){
@@ -215,11 +244,36 @@
 				this.show_movement_history();
 
 				const max_score = Math.max(0, ...Object.values(round_data.guesses).map(x=>x.score));
-
+				const you_team = Object.keys(this.game_info.rules.teams).filter(t=>this.game_info.rules.teams[t].includes(this.game_info.you))[0];
+				const team_guesses = {};
+				for(const team in this.game_info.rules.teams){
+					const guesses = []
+					for(const player of this.game_info.rules.teams[team]){
+						if(round_data.guesses[player]){
+							guesses.push(round_data.guesses[player]);
+						}
+					}
+					team_guesses[team] = guesses;
+				}
+				const team_best_guesses = {}
+				for(const team in team_guesses){
+					team_best_guesses[team] = team_guesses[team].reduce((acc,curr)=>{
+						if(!acc){
+							return curr;
+						}
+						if(!curr){
+							return acc;
+						}
+						if(acc.score>curr.score){
+							return acc;
+						}
+						return curr;
+					},null)
+				}
 				const tables = [];
 				for(const elem of this.root.getElementsByClassName("round-results-message")){
 					elem.innerHTML = '';
-					const your_score = round_data.guesses[this.game_info.you]?.score || 0;
+					const your_score = team_best_guesses[you_team]?.score || 0;
 					const span = document.createElement('span');
 					span.innerHTML = (your_score == max_score) ? `${your_score} points, you win this round!` : `You lost ${max_score-your_score} health.`
 					elem.appendChild(span);
@@ -229,43 +283,73 @@
 					elem.appendChild(table);
 					tables.push(table);
 				}
-				const guesses = [];
-				const usernames = [];
-				const labels = [];
 				//Show "you" first
-				const user_order = Object.keys(round_data.health_before).sort((a,b)=>(b==this.game_info.you)-(a==this.game_info.you));
-				for(const user of user_order){
-					const guess = round_data.guesses[user];
-					if(guess){
-						guesses.push(guess)
-						usernames.push(user);
-						labels.push(user==this.game_info.you ? '★' : "O");
-					}
-					for(const table of tables){
+				const team_order = Object.keys(round_data.health_before).sort((a,b)=>(b==you_team)-(a==you_team));
+				const is_team_game = Math.max(...Object.values(this.game_info.rules.teams).map(x=>x.length))>1;
+				const guesses = []
+				const labels = [];
+				const usernames =[];
+				const teamnames = [];
+				for(const team of team_order){
+					const sorted_users = [...this.game_info.rules.teams[team]].sort((a,b)=>(round_data.guesses[b]?.score || 0)-(round_data.guesses[a]?.score || 0))
+					for(let i=0; i<sorted_users.length; i++){
+						const user = sorted_users[i];
+						const guess = round_data.guesses[user];
+						if(guess){
+							const label=(user==this.game_info.you ? '★' : (this.game_info.rules.teams[you_team].includes(user) ? "T" : "O"));
+							if(i==0){
+								guesses.push(guess);
+								labels.push(label);
+								usernames.push(user);
+								teamnames.push(team);
+							}
+							else{
+								this.add_guess_to_map(guess, label, user, team);
+							}
+						}
+						for(const table of tables){
 
-						const health_before = round_data.health_before[user];
-						const max_health = this.game_info.rules.max_health;
-						const damage = Math.min(max_score-(guess?.score || 0), health_before);
-						const health_after = health_before - damage;
-						const tr = document.createElement('tr');
-						table.appendChild(tr);
-						tr.appendChild(document.createElement('td').appendChild(document.createTextNode(`${user}${user==this.game_info.you ? " (You)":""}`)).parentNode);
-						const points_td = document.createElement('td');
-						points_td.innerHTML = `${guess?.score || 0} points<br>${guess?.distance ? MysteryPano.format_distance(guess.distance) : "No guess"}`;
-						tr.appendChild(points_td);
-						const delta_td = document.createElement("td");
-						delta_td.innerHTML = `<span style="color:${damage>0 ? "red" : "green"}">${-damage}</span>`
-						tr.appendChild(delta_td);
-						const health_td = document.createElement('td');
-						tr.appendChild(health_td);
-						const health_bar = document.createElement('span');
-						health_td.appendChild(health_bar);
-						health_bar.classList.add("health-bar","notransition");
-						health_bar.style.setProperty("--max-health", max_health);
-						health_bar.style.setProperty("--current-health", health_before);
-						health_bar.offsetHeight;
-						health_bar.classList.remove("notransition");
-						health_bar.style.setProperty("--current-health", health_after);
+							const health_before = round_data.health_before[team];
+							const max_health = this.game_info.rules.max_health;
+							const damage = Math.min(max_score-(team_best_guesses[team]?.score || 0), health_before);
+							const health_after = health_before - damage;
+							const tr = document.createElement('tr');
+							table.appendChild(tr);
+							if(i==0 && is_team_game){
+								const team_td = document.createElement('td');
+								team_td.textContent = team;
+								team_td.rowSpan = sorted_users.length;
+								team_td.style.color = MysteryPano.get_color_from_string(team);
+								team_td.style.wordBreak = "break-all"
+								tr.appendChild(team_td);
+							}
+							const username_td = document.createElement('td');
+							username_td.textContent = user;
+							if(user==this.game_info.you){
+								username_td.style.backgroundColor = '#fffab0';
+							}
+							tr.appendChild(username_td);
+							const points_td = document.createElement('td');
+							points_td.innerHTML = `${guess?.score || 0} points<br>${guess?.distance ? MysteryPano.format_distance(guess.distance) : "No guess"}`;
+							tr.appendChild(points_td);
+							if(i==0){
+								const delta_td = document.createElement("td");
+								delta_td.rowSpan = sorted_users.length;
+								delta_td.innerHTML = `<span style="color:${damage>0 ? "red" : "green"}">${-damage}</span>`
+								tr.appendChild(delta_td);
+								const health_td = document.createElement('td');
+								health_td.rowSpan = sorted_users.length;
+								tr.appendChild(health_td);
+								const health_bar = document.createElement('span');
+								health_td.appendChild(health_bar);
+								health_bar.classList.add("health-bar","notransition");
+								health_bar.style.setProperty("--max-health", max_health);
+								health_bar.style.setProperty("--current-health", health_before);
+								health_bar.offsetHeight;
+								health_bar.classList.remove("notransition");
+								health_bar.style.setProperty("--current-health", health_after);
+							}
+						}
 					}
 				}
 				if(Object.keys(round_data.guesses).length==0){
@@ -274,7 +358,7 @@
 					this.map.setZoom(6);
 				}
 				else{
-					this.add_results_to_map(guesses, Array(guesses.length).fill(round_data.location), usernames, labels, Array(guesses.length).fill((round_data.round+1).toString()));
+					this.add_results_to_map(guesses, Array(guesses.length).fill(round_data.location), usernames, labels, Array(guesses.length).fill((round_data.round+1).toString()), teamnames);
 				}
 				//12 second time for viewing results(keep the same as the server)
 				this.set_timer(round_data.finish_time, 12000);
@@ -286,7 +370,8 @@
 					container.appendChild(this.map.getDiv());
 				}
 				this.map.fitBounds(google.maps.LatLngBounds.MAX_BOUNDS);
-				const user_order = Object.keys(game_info.health_before[0]).sort((a,b)=>(b==this.game_info.you)-(a==this.game_info.you));
+				const you_team = Object.keys(this.game_info.rules.teams).filter(t=>this.game_info.rules.teams[t].includes(this.game_info.you))[0];
+				const team_order = Object.keys(game_info.health_before[0]).sort((a,b)=>(b==you_team)-(a==you_team));
 				for(const container of this.root.getElementsByClassName("game-results-message")){
 					container.innerHTML = ""
 					const base = new DocumentFragment();
@@ -294,9 +379,11 @@
 					table.classList.add("game-results-table");
 					const header = document.createElement("thead");
 					header.appendChild(document.createElement("td"));
-					for(const player of user_order){
+					for(const team of team_order){
 						const th = document.createElement("th");
-						th.textContent = player;
+						th.textContent = team;
+						th.style.color = MysteryPano.get_color_from_string(team);
+						th.style.wordBreak = "break-all"
 						th.colSpan = 2;
 						header.appendChild(th);
 					}
@@ -309,10 +396,28 @@
 						const show_round_on_map = ()=>{
 							const guesses = [];
 							const label_guesses = [];
-							for(const player of user_order){
-								const guess = game_info.guesses[i][player];
-								guesses.push(guess);
-								label_guesses.push(player==this.game_info.you ? '★' : "O");
+							const usernames = [];
+							const teamnames = [];
+							for(const team of team_order){
+								const sorted_users = [...this.game_info.rules.teams[team]].sort((a,b)=>( game_info.guesses[i][b]?.score || 0)-(game_info.guesses[i][a]?.score || 0))
+								let first = true;
+								for(const player of sorted_users){
+									const guess = game_info.guesses[i][player];
+									if(!guess){
+										continue;
+									}
+									const label = player==this.game_info.you ? '★' : (this.game_info.rules.teams[you_team].includes(player) ? "T" : "O")
+									if(first){
+										guesses.push(guess);
+										label_guesses.push(label);
+										usernames.push(player);
+										teamnames.push(team);
+										first=false;
+									}
+									else{
+										this.add_guess_to_map(guess, label, player, team);
+									}
+								}
 							}
 							if(!guesses.reduce((acc,curr)=>acc||curr, false)){
 								this.add_location_to_map(game_info.locations[i], (i+1).toString());
@@ -320,7 +425,7 @@
 								this.map.setZoom(6);
 							}
 							else{
-								this.add_results_to_map(guesses, Array(guesses.length).fill(game_info.locations[i]), user_order, label_guesses, Array(guesses.length).fill(i+1))
+								this.add_results_to_map(guesses, Array(guesses.length).fill(game_info.locations[i]), usernames, label_guesses, Array(guesses.length).fill(i+1), teamnames)
 							}
 						}
 						row.addEventListener("click", ()=>{
@@ -328,9 +433,36 @@
 							show_round_on_map();
 						});
 						row.style.cursor = "pointer";
-						for(const player of user_order){
 
-							const guess = game_info.guesses[i][player];
+						const team_guesses = {};
+						for(const team in this.game_info.rules.teams){
+							const guesses = []
+							for(const player of this.game_info.rules.teams[team]){
+								if(game_info.guesses[i][player]){
+									guesses.push(game_info.guesses[i][player]);
+								}
+							}
+							team_guesses[team] = guesses;
+						}
+						const team_best_guesses = {}
+						for(const team in team_guesses){
+							team_best_guesses[team] = team_guesses[team].reduce((acc,curr)=>{
+								if(!acc){
+									return curr;
+								}
+								if(!curr){
+									return acc;
+								}
+								if(acc.score>curr.score){
+									return acc;
+								}
+								return curr;
+							},null)
+						}
+
+						for(const team of team_order){
+
+							const guess = team_best_guesses[team];
 							const td_points = document.createElement('td');
 							td_points.innerHTML = `
 								<span>
@@ -341,8 +473,8 @@
 							`;
 							row.appendChild(td_points);
 							const td = document.createElement('td');
-							const health_before = game_info.health_before[i][player];
-							const health_after = game_info.health_before[i+1][player];
+							const health_before = game_info.health_before[i][team];
+							const health_after = game_info.health_before[i+1][team];
 							const delta = health_after-health_before;
 							if(health_after==0){
 								td.style.backgroundColor = "#FFCCCC"
@@ -352,7 +484,7 @@
 								show_round_on_map();
 								const statusmsg = document.createElement("span");
 								statusmsg.style.fontSize = "1.5em";
-								statusmsg.innerHTML = (player==this.game_info.you) ? "Victory! You won." : "Defeat! You lost."
+								statusmsg.innerHTML = (this.game_info.rules.teams[team].includes(this.game_info.you)) ? "Victory! You won." : "Defeat! You lost."
 								base.prepend(statusmsg, document.createElement("br"));
 							}
 							td.innerHTML = `

@@ -130,7 +130,9 @@ html,body{
 }
 .lock-in-button{
 	margin-top:5px;
-	line-height:300%;
+	font-size:1.5em;
+	line-height:200%;
+	direction:rtl;
 }
 .pano-container, .round-results-container,.game-results-container{
 	width:100%;
@@ -150,6 +152,7 @@ html,body{
 	text-align:center;
 	margin:5px;
 	font:20px sans-serif;
+	max-height:50%;
 }
 .next-round-button{
 	font:20px sans-serif;

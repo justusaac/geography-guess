@@ -28,7 +28,7 @@ create table Duels (
 	DuelID serial primary key,
 	DuelInfo jsonb,
 	MainUserID int references Users(UserID) on delete cascade,
-	OpponentUserID int references Users(UserID) on delete cascade,
+	OpponentUserIDs integer[],
 	MapID int references Maps(MapID) on delete cascade,
 	CreateTime timestamp not null default current_timestamp
 );

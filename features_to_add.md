@@ -3,6 +3,7 @@
 - Duels
 	-more customization (different hp, multipliers, ...)
 	-open duel to public w/ browser
+	-Team and FFA duels
 - Rotating locations on world map
 - Use uuids rather than ints
 - Add full setup script for .env file and db initialization
