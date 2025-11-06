@@ -32,6 +32,15 @@ create table Duels (
 	MapID int references Maps(MapID) on delete cascade,
 	CreateTime timestamp not null default current_timestamp
 );
+create table HighScores (
+	UserID int references Users(UserID) on delete cascade,
+	MapID int references Maps(MapID) on delete cascade,
+	GameID int references Games(GameID) on delete cascade,
+	Score int,
+	Elapsed int,
+	primary key (UserID, MapID)
+);
+
 
 
 

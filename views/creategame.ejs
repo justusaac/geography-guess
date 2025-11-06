@@ -36,7 +36,11 @@
 	<div><%= description %></div>
 	<br>
 	<span style="background-color:lavender;padding:3px;">Contains <%= locationcount %> locations</span>
-	<br><br>
+	<br>
+	<% if(highscoregameid){ %>
+		<br><span><b>Your high score: </b><a href="/game/<%= highscoregameid %>"><%= score %> points, <%= Math.floor(elapsed/1000/60) %>:<%= (Math.floor(elapsed/1000)%60).toString().padStart(2, "0") %></a></span><br>
+	<% } %>
+	<br>
 	<form autocomplete="on" method="post" id="new-game-form" action="/newgame/<%= mapid %>">
 		<div class="form-outline">
 			<select name="freedom">

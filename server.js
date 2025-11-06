@@ -212,7 +212,7 @@ app.post("/challenge/:id", require_auth, check_duplicate_challenge, async (req, 
 })
 
 app.get("/creategame/:id", require_auth, async (req, res) => {
-    const map = (await db_pool.query("select * from Maps where MapID=$1::int",[Number(req.params.id) || -1])).rows[0]
+    const map = (await db_pool.query("select Maps.*, HighScores.Score, HighScores.Elapsed, HighScores.GameID as highscoregameid from Maps left join HighScores on Maps.MapID=HighScores.MapID and HighScores.UserID=$2::int where Maps.MapID=$1::int",[Number(req.params.id) || -1, req.session.passport.user.id])).rows[0]
     if(!map){
         res.redirect("/maplist")
     }
@@ -348,6 +348,7 @@ app.ws("/gamesession/:id", async (ws, req) => {
             //Keys based on data.type
             next_round:()=>{
                 let score_so_far = 0;
+                let total_time = 0;
                 for(let i=0; i<game.locations.length; i++){
                     if(!game.guesses[i]){
                         if(game.startTimes[i]){
@@ -369,7 +370,10 @@ app.ws("/gamesession/:id", async (ws, req) => {
                         };
                     }
                     score_so_far += game.guesses[i].score;
+                    total_time += game.guesses[i].elapsed;
                 }
+                
+                db_pool.query(`insert into HighScores (UserID, MapID, GameID, Score, Elapsed) with CurrentGame as (select UserID, MapID, GameID, $2::int as Score, $3::int as Elapsed from Games where GameID=$1::int) select UserID, MapID, GameID, Score, Elapsed from CurrentGame on conflict (UserID, MapID) do update set ${["GameID", "Score", "Elapsed"].map(col=>`${col}=case when excluded.Score>HighScores.Score or (excluded.Score=HighScores.Score and excluded.Elapsed<HighScores.Elapsed) then excluded.${col} else HighScores.${col} end`).join(',')};`,[gameId, score_so_far, total_time])
                 return get_game_results();
             },
             show_challengers:async ()=>{
@@ -1098,6 +1102,7 @@ app.get("/dailychallenge", async (req,res)=>{
         return res.end("World map not found");
     }
     const now = (await db_pool.query("select current_timestamp;")).rows[0].current_timestamp;
+    console.log(now);
     const existing = await db_pool.query("select ChallengeID from Games where UserID=$1::int and CreateTime::date=$2::date", [site_admin_user_id, now]);
     const existing_row = existing.rows[0];
     if(existing_row?.challengeid == null){

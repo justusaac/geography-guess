@@ -13,6 +13,7 @@ class MysteryPano{
 				clickableIcons:false,
 				fullscreenControl:false,
 				streetViewControl:false,
+				scaleControl:true,
 				mapId:"Stunna boy get em real hollywood star"
 			}
 		);
