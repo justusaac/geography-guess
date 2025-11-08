@@ -13,7 +13,7 @@
             width:auto;
             grid-template-columns: 1fr max-content;
         }
-        #form-results{
+        #form-results, #world-map{
             display:grid;
             grid-template-columns: repeat(auto-fill, minmax(clamp(100%/4, 20em, 100%), auto));
         }
@@ -26,6 +26,9 @@
             text-decoration:none;
             box-sizing:border-box;
             background-color:#c9f2ff;
+        }
+        #world-map > .map-card{
+            background-color:#fff17f;
         }
         .map-description{
             display:inline-block;
@@ -88,6 +91,8 @@
                 }
                 elem.append(...layout);
 
+                document.getElementById("world-map").style.display = (prevQuery=="") ? "revert-layer":"none";
+
                 const pageinput = document.getElementById("pageinput");
                 pageinput.value = parseInt(pageinput.value)+1;
                 return false;
@@ -104,8 +109,18 @@
         <input type="hidden" name="page" value="0" id="pageinput" autocomplete="off"/>
         <input type="submit" value="Search">
     </form>
+    <div id="world-map"></div>
     <hr>
     <div id="form-results"></div>
     <button onclick="sendForm(event)" id="load-more">Load more maps</button>
+    <script>
+        window.addEventListener("load", ()=>{
+            const world_map = <%- JSON.stringify(world_map ?? []) %>;
+            const dest = document.getElementById("world-map");
+            for(const map of world_map){
+                dest.appendChild(formatMap(map));
+            }
+        });
+    </script>
 </body>
 </html>

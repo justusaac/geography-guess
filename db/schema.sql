@@ -29,6 +29,8 @@ create table Duels (
 	DuelInfo jsonb,
 	MainUserID int references Users(UserID) on delete cascade,
 	OpponentUserIDs integer[],
+	MaxPlayers int default 2,
+	Public boolean not null default false,
 	MapID int references Maps(MapID) on delete cascade,
 	CreateTime timestamp not null default current_timestamp
 );

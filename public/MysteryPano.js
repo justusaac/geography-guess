@@ -445,27 +445,33 @@ class MysteryPano{
 		return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 	}
 	add_round_to_map(guess, actual, label_guess = '?', label_actual='★', username=null, teamname=null){
-		const polyline_opts = {
-			path:[guess.location, actual],
-		    strokeColor: MysteryPano.get_color(guess.score),
-		    strokeOpacity: 1,
-		    strokeWeight: 2,
-		    zIndex:3,
-		    geodesic:true,
-		    icons:[{icon:{path:google.maps.SymbolPath.FORWARD_CLOSED_ARROW,scale:2}}]
-		};
-		this.add_to_map(new google.maps.Polyline(polyline_opts));
-		this.add_to_map(new google.maps.Polyline({
-			...polyline_opts,
-			strokeWeight:4,
-			strokeColor:'#000000',
-			zIndex:-1,
-			icons:polyline_opts.icons.map(x => {return {...x, icon:{...x.icon, strokeWeight:4}}})
-		}));
-		this.add_guess_to_map(guess,label_guess,username, teamname);
+		if(!(guess.score==0 && guess.distance==0)){
+			const polyline_opts = {
+				path:[guess.location, actual],
+			    strokeColor: MysteryPano.get_color(guess.score),
+			    strokeOpacity: 1,
+			    strokeWeight: 2,
+			    zIndex:3,
+			    geodesic:true,
+			    icons:[{icon:{path:google.maps.SymbolPath.FORWARD_CLOSED_ARROW,scale:2}}]
+			};
+			this.add_to_map(new google.maps.Polyline(polyline_opts));
+			this.add_to_map(new google.maps.Polyline({
+				...polyline_opts,
+				strokeWeight:4,
+				strokeColor:'#000000',
+				zIndex:-1,
+				icons:polyline_opts.icons.map(x => {return {...x, icon:{...x.icon, strokeWeight:4}}})
+			}));
+			this.add_guess_to_map(guess,label_guess,username, teamname);
+		}
+		else{
+			this.map.panTo(actual);
+			this.map.setZoom(6);
+		}
 		this.add_location_to_map(actual, label_actual);
 	}
-	add_guess_to_map(guess, label_guess, username=null, teamname=null){
+	add_guess_to_map(guess, label_guess= '?', username=null, teamname=null){
 		const question_element = new google.maps.marker.PinElement({
 			background: teamname ? MysteryPano.get_color_from_string(teamname) : username ? MysteryPano.get_color_from_string(username) : undefined,
 			glyphText:label_guess,
@@ -482,7 +488,7 @@ class MysteryPano{
 			zIndex:1,
 		}));
 	}
-	add_location_to_map(actual, label_actual){
+	add_location_to_map(actual, label_actual='★'){
 		const anchor = document.createElement('a');
 		anchor.href = `https://www.google.com/maps/@?api=1&map_action=pano`
 			+`&viewpoint=${actual.lat}%2C${actual.lng}`
@@ -519,7 +525,10 @@ class MysteryPano{
 		for(const container of this.root.getElementsByClassName("round-results-map-container")){
 			container.appendChild(this.map.getDiv());
 		}
-		this.map.fitBounds(MysteryPano.get_bounds(round_info.guess.location, round_info.actual));
+		const no_guess = round_info.guess.distance==0 && round_info.guess.score==0;
+		if(!no_guess){
+			this.map.fitBounds(MysteryPano.get_bounds(round_info.guess.location, round_info.actual));
+		}
 		this.add_round_to_map(round_info.guess, round_info.actual);
 		this.show_movement_history();
 		for(const elem of this.root.getElementsByClassName("round-results-message")){
@@ -527,7 +536,7 @@ class MysteryPano{
 				`Round ${round_info.round+1} results:<br>
 				${round_info.guess.score} point${round_info.guess.score==1 ? '' : 's'}!
 				<br>${ 
-				round_info.guess.distance==0 && round_info.guess.score==0 ? 
+				no_guess ? 
 				`You did not make a guess in time` : 
 				`Your guess was ${MysteryPano.format_distance(round_info.guess.distance)} away.`
 				}`;
@@ -541,19 +550,28 @@ class MysteryPano{
 	}
 	add_results_to_map(guesses, locations, username=null, label_guesses = null, label_locations=null, teamname=null){
 		const bounds = {north:-90,south:90,east:-180,west:180};
+		let markers = 0;
 		for(let i=0; i<locations.length; i++){
 			if(!guesses[i]){
 				continue;
 			}
 			this.add_round_to_map(guesses[i], locations[i], label_guesses?.[i], (label_locations?.[i]??(i+1)).toString(), Array.isArray(username) ? username[i] : username, Array.isArray(teamname) ? teamname[i] : teamname);
-			for(const loc of [guesses[i].location, locations[i]]){
+			const marker_locations = [locations[i]];
+			if(guesses[i].score!=0 || guesses[i].distance!=0){
+				marker_locations.push(guesses[i].location);
+			}
+			for(const loc of marker_locations){
 				bounds.north = Math.max(bounds.north, loc.lat);
 				bounds.south = Math.min(bounds.south, loc.lat);
 				bounds.east = Math.max(bounds.east, loc.lng);
 				bounds.west = Math.min(bounds.west, loc.lng);
+				markers++;
 			}
 		}
 		this.map.fitBounds(bounds);
+		if(markers<2){
+			this.map.setZoom(6);
+		}
 	}
 	show_game_results(game_info){
 		this.switch_view('game-results-container');
@@ -580,7 +598,6 @@ class MysteryPano{
 			this.clear_map();
 			this.add_results_to_map(rounds, locations, usernames, null, labels);
 		};
-		showeverything();
 		for(const container of this.root.getElementsByClassName("game-results-message")){
 			const base = new DocumentFragment();
 
@@ -660,6 +677,7 @@ class MysteryPano{
 
 			container.replaceChildren(base);
 		}
+		showeverything();
 	}
 	static get_game_id(){
 		const path = window.location.pathname.split('/');

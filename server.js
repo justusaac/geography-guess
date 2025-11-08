@@ -226,18 +226,24 @@ app.get("/pregame/:id", require_auth_game_id, async (req, res) => {
     res.render('pregame', with_username(game, req));
 });
 app.get("/challenge/:id", require_auth, check_duplicate_challenge, async (req, res) => {
-    const original_game = await db_pool.query("select Games.GameID, Games.GameInfo, Maps.MapName, Users.UserName as Challenger from Games left join Maps on Maps.MapID=Games.MapID left join Users on Users.UserID=Games.UserID where GameID=$1::int", [Number(req.params.id) || -1]);
+    const original_game = await db_pool.query("select Games.GameID, Games.GameInfo, Maps.MapName, Maps.MapID, Users.UserName as Challenger from Games left join Maps on Maps.MapID=Games.MapID left join Users on Users.UserID=Games.UserID where GameID=$1::int", [Number(req.params.id) || -1]);
     if(original_game.rows.length == 0){
         return res.redirect("/maplist");
     }
     res.render('createchallenge', with_username(original_game.rows[0], req));
 });
-app.get("/maplist", require_auth, async(req, res) => {
-    res.render('maplist', with_username({},req));
-});
-app.get("/", require_auth, async(req, res) => {
-    res.render('maplist', with_username({},req));
-});
+
+const find_world_map = async (userid)=>{
+    const res = await db_pool.query("select Maps.MapID from Maps where lower(Maps.MapName)='world' and UserID=$1::int",[userid]);
+    return res.rows[0]?.mapid;
+}
+const render_map_list = async(req, res) => {
+    const world_map_id = await find_world_map(-1);
+    const result = await db_pool.query('select Maps.MapID, Maps.MapName, Maps.Description, Users.UserID, Users.Username from Maps left join Users on Maps.UserID=Users.UserID where MapID=$1::int',[world_map_id]);
+    res.render('maplist', with_username({world_map:result.rows},req));
+};
+app.get("/maplist", require_auth, render_map_list);
+app.get("/", require_auth, render_map_list);
 
 app.get("/game/:id", require_auth_game_id, (req, res) => {
     res.sendFile(__dirname+'/public/mapview.html');
@@ -464,10 +470,7 @@ app.ws("/gamesession/:id", async (ws, req) => {
     })()));
 });
 
-const find_world_map = async (userid)=>{
-    const res = await db_pool.query("select Maps.MapID from Maps where lower(Maps.MapName)='world' and UserID=$1::int",[userid]);
-    return res.rows[0]?.mapid;
-}
+
 
 app.post('/maps', require_auth, async (req,res) => {
     const page = req.body.page ?? 0;
@@ -616,7 +619,7 @@ app.ws("/duelroomsession/:id", async (ws,req) => {
     }
     await client.query("begin;")
     await client.query("select 67 from Duels where DuelID=$1::integer for update;",[duelId]);
-    const row = (await client.query("select Duels.DuelID, Duels.DuelInfo, Duels.MainUserID, Duels.MapID, OwnerUsers.Username as ownername, array_agg(OpponentUsers.Username) as opponentnames,  Maps.MapName, Maps.ScoreModifier from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=any(Duels.OpponentUserIDs) left join Maps on Maps.MapID=Duels.MapID where DuelID=$1::integer group by Duels.DuelID, Duels.DuelInfo, Duels.MapID, ownername, Maps.MapName, Maps.ScoreModifier, Duels.MainUserID", [duelId])).rows[0];
+    const row = (await client.query("select Duels.DuelID, Duels.DuelInfo, Duels.MainUserID, Duels.MapID, Duels.Public, Duels.MaxPlayers, OwnerUsers.Username as ownername, array_agg(OpponentUsers.Username) as opponentnames,  Maps.MapName, Maps.ScoreModifier from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=any(Duels.OpponentUserIDs) left join Maps on Maps.MapID=Duels.MapID where DuelID=$1::integer group by Duels.DuelID, Duels.DuelInfo, Duels.MapID, ownername, Maps.MapName, Maps.ScoreModifier, Duels.MainUserID, Duels.Public, Duels.MaxPlayers", [duelId])).rows[0];
     if(!row){
         ws.close(3001, "Duel not found");
         return;
@@ -665,13 +668,14 @@ app.ws("/duelroomsession/:id", async (ws,req) => {
     if(is_owner || row.opponentnames.includes(username)){
         await notify_player_list();
     }
-    else if(false){
-        //implement "duel full" logic here
-    }
     else{
-        await client.query(`
-            update Duels set OpponentUserIDs=array_append(OpponentUserIDs, $2::integer) where DuelID=$1::int and ( not $2::integer=any(OpponentUserIDs));
+        const results = await client.query(`
+            update Duels set OpponentUserIDs=array_append(OpponentUserIDs, $2::integer) where DuelID=$1::int and (not $2::integer=any(OpponentUserIDs)) and (MaxPlayers is null or (1+coalesce(array_length(OpponentUserIDs,1), 0))<MaxPlayers);
         `, [duelId, userId]);
+        if(results.rowCount==0){
+            ws.close(3001, "Duel was already full");
+            return;
+        }
         await notify_player_list();
     }
     await client.query("commit;");
@@ -686,6 +690,8 @@ app.ws("/duelroomsession/:id", async (ws,req) => {
         const {type,info} = data;
         if(type == "update_rules"){
             if(is_owner){
+                const max_players = info.max_players==null ? null : Math.max(2, Number(info.max_players));
+                const public_room = Boolean(info.public)
                 const filtered_info = {
                     moving:Boolean(info.moving),
                     zooming:Boolean(info.zooming), 
@@ -699,9 +705,11 @@ app.ws("/duelroomsession/:id", async (ws,req) => {
                 await client.query("begin;");
                 await client.query("select 67 from Duels where DuelID=$1::int for update;", [duelId]);
                 await client.query(`
-                    update Duels set DuelInfo=jsonb_set(DuelInfo, '{rules}', $2::jsonb, true) where DuelID=$1::integer;
-                `, [duelId, filtered_info]);
-                await client.query(`select pg_notify($1::text, '{"type":"update_rules", "info":' || jsonb_pretty(DuelInfo->'rules') || '}') from Duels where DuelID=$2::integer;
+                    update Duels set DuelInfo=jsonb_set(DuelInfo, '{rules}', $2::jsonb, true), Public=$3::boolean, MaxPlayers=$4::integer where DuelID=$1::integer;
+                `, [duelId, filtered_info, public_room, max_players]);
+                await client.query(`select pg_notify($1::text, '{"type":"update_rules", "info":' || jsonb_pretty(
+                    jsonb_set(jsonb_set(DuelInfo->'rules', '{max_players}', coalesce(MaxPlayers::text::jsonb,'null'::jsonb), true), '{public}', Public::text::jsonb, true)
+                ) || '}') from Duels where DuelID=$2::integer;
                 `, [channelId, duelId]);
                 await client.query("commit;");
             }
@@ -745,7 +753,7 @@ app.ws("/duelroomsession/:id", async (ws,req) => {
     });
     ws.send(JSON.stringify({
         type:"update_rules",
-        info:row.duelinfo.rules
+        info:{...row.duelinfo.rules, max_players: row.maxplayers, public:row.public}
     }));
 
 });
@@ -1102,7 +1110,6 @@ app.get("/dailychallenge", async (req,res)=>{
         return res.end("World map not found");
     }
     const now = (await db_pool.query("select current_timestamp;")).rows[0].current_timestamp;
-    console.log(now);
     const existing = await db_pool.query("select ChallengeID from Games where UserID=$1::int and CreateTime::date=$2::date", [site_admin_user_id, now]);
     const existing_row = existing.rows[0];
     if(existing_row?.challengeid == null){

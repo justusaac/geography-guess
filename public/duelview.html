@@ -13,7 +13,7 @@
     		--max-health:10000;
     		--current-health:67;
     		counter-reset: maxhealth var(--max-health) currenthealth var(--current-health);
-    		--health-bg-color:hsl(min(calc(var(--current-health) / var(--max-health) * 200deg), 120deg) 100% 30%);
+    		--health-bg-color:hsl(min(calc(var(--current-health) / var(--max-health) * 200deg), 120deg) 100% 40%);
     		background: linear-gradient( to right, var(--health-bg-color) 0%, var(--health-bg-color) calc(var(--current-health) / var(--max-health) * 100%), rgba(0,0,0,0.6) calc(var(--current-health) / var(--max-health) * 100%)) ;
     		border: 1px solid #959595;
     		border-radius:3px;

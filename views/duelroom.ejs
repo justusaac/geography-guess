@@ -36,7 +36,7 @@
 			font-size: 1.5em;
 			margin:10px;
 		}
-		#team_count{
+		#team_count, #max_player_count{
 			width:4em;
 		}
 	</style>
@@ -73,6 +73,21 @@
 			}
 			for(const elem of document.getElementsByName("max_health")){
 				elem.value = rules.max_health;
+			}
+			for(const elem of document.getElementsByName("public")){
+				elem.checked = rules.public;
+			}
+			for(const elem of document.getElementsByName("max_player_box")){
+				elem.checked = (rules.max_players != null)
+			}
+			for(const elem of document.getElementsByName("max_player_count")){
+				if(rules.max_players==null){
+					elem.readOnly = true;
+				}
+				else{
+					elem.readOnly = false;
+					elem.value = rules.max_players
+				}
 			}
 			if(typeof rules.teams=='object' && rules.teams != null){
 				for(const elem of document.getElementsByName("teams")){
@@ -127,7 +142,7 @@
 					}
 					txt.textContent += user;
 					if(user === owner){
-						txt.textContent += " (Owner)";
+						txt.textContent += " (Leader)";
 					}
 					if(user === "<%= username %>"){
 						txt.textContent += " (You)";
@@ -179,6 +194,11 @@
 	Map: <a href="/creategame/<%=mapid%>"><b><%= mapname %></b></a>
 	<br>
 	<form class="room-content" autocomplete="off" id="rules-form">
+		<span class="rules-form">
+			<label for="public-box">Public</label><input type="checkbox" name="public" id="public-box">
+			<br>
+			<label for="max-player-box">Max players</label><input type="checkbox" id="max-player-box" name="max_player_box"><input type="number" min="2" value="2" name="max_player_count" id="max_player_count" >
+		</span>
 		<span class="rules-form">
 			<select name="freedom">
 				<option value="moving" selected>Moving</option>
@@ -262,6 +282,8 @@ form.addEventListener('change',(evt)=>{
 	else{
 		info.teams = null;
 	}
+	info.max_players = fd["max_player_box"] ? fd["max_player_count"] : null;
+	info.public = fd["public"];
 	socket.send(JSON.stringify({
 		type:"update_rules",
 		info

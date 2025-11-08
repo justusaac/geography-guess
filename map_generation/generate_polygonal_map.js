@@ -58,8 +58,8 @@ const initial_loc_count = await map.location_count();
 
 const shutdown = async () => {
 	console.log("\nShutting down")
-    const loc_count = await map.location_count();
     await map.update_metadata();
+    const loc_count = await map.location_count();
     await map.close();
     console.log(`\ndone with ${mapname}, now has ${loc_count} locations (added ${loc_count-initial_loc_count})`);
 
