@@ -17,15 +17,15 @@ create table Maps (
 	UpdateTime timestamp not null default current_timestamp
 );
 create table Games (
-	GameID serial primary key,
+	GameID uuid primary key default gen_random_uuid(),
 	GameInfo jsonb,
 	UserID int references Users(UserID) on delete cascade,
 	MapID int references Maps(MapID) on delete cascade,
-	ChallengeID int,
+	ChallengeID uuid,
 	CreateTime timestamp not null default current_timestamp
 );
 create table Duels (
-	DuelID serial primary key,
+	DuelID uuid primary key default gen_random_uuid(),
 	DuelInfo jsonb,
 	MainUserID int references Users(UserID) on delete cascade,
 	OpponentUserIDs integer[],
@@ -37,7 +37,7 @@ create table Duels (
 create table HighScores (
 	UserID int references Users(UserID) on delete cascade,
 	MapID int references Maps(MapID) on delete cascade,
-	GameID int references Games(GameID) on delete cascade,
+	GameID uuid references Games(GameID) on delete cascade,
 	Score int,
 	Elapsed int,
 	primary key (UserID, MapID)

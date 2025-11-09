@@ -39,21 +39,15 @@ app.set("view engine", "ejs");
 app.set("views", __dirname+"/views");
 
 async function getGame(id){
-    if(!isFinite(id)){
-        return null;
-    }
-    const result = await db_pool.query('select Games.*, Maps.MapName, Maps.MapID, Maps.ScoreModifier from Games left join Maps on Games.MapID=Maps.MapID where GameID=$1::integer;', [id]);
+    const result = await db_pool.query('select Games.*, Maps.MapName, Maps.MapID, Maps.ScoreModifier from Games left join Maps on Games.MapID=Maps.MapID where GameID=$1::uuid;', [id]);
     return result.rows[0];
 }
 async function getDuelUsers(id){
-    if(!isFinite(id)){
-        return null;
-    }
-    const result = await db_pool.query('select OwnerUsers.Username as OwnerName, array_agg(OpponentUsers.Username) as opponentnames from Duels left join Maps on Duels.MapID=Maps.MapID left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=ANY(Duels.OpponentUserIDs) where DuelID=$1::integer group by OwnerName', [id]);
+    const result = await db_pool.query('select OwnerUsers.Username as OwnerName, array_agg(OpponentUsers.Username) as opponentnames from Duels left join Maps on Duels.MapID=Maps.MapID left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=ANY(Duels.OpponentUserIDs) where DuelID=$1::uuid group by OwnerName', [id]);
     return result.rows[0];
 }
 async function backupGame(id, gameinfo){
-    return db_pool.query('update Games set gameinfo=$1::jsonb where GameID=$2::integer', [gameinfo, id]);
+    return db_pool.query('update Games set gameinfo=$1::jsonb where GameID=$2::uuid', [gameinfo, id]);
 }
 
 function require_auth(req, res, next) {
@@ -70,7 +64,7 @@ async function check_req_game_id(req){
         return false;
     }
     const userId = req?.session?.passport?.user?.id;
-    const gameId = parseInt(req?.params?.id);
+    const gameId = req?.params?.id;
     const game = await getGame(gameId);
     if(!game || !userId || game?.userid != userId){
         return false;
@@ -91,7 +85,7 @@ async function check_req_duel_id(req){
     }
     const userId = req?.session?.passport?.user?.id;
     const username = req?.session?.passport?.user?.username;
-    const gameId = parseInt(req?.params?.id);
+    const gameId = req?.params?.id;
     const game = await getDuelUsers(gameId);
     if(!game || !userId || !username || (game?.ownername != username && !game?.opponentnames.includes(username))){
         return false;
@@ -108,11 +102,11 @@ async function require_auth_duel_id (req, res, next) {
 }
 async function check_duplicate_challenge (req, res, next) {
     const userId = req?.session?.passport?.user?.id;
-    const challengeId = parseInt(req?.params?.id);
+    const challengeId = req?.params?.id;
     if(!challengeId || !userId){
         return res.redirect("/maplist");
     }
-    const response = await db_pool.query("select GameID from Games where UserID=$1::int and (ChallengeID=$2::int or GameID=$2::int)", [userId, challengeId]);
+    const response = await db_pool.query("select GameID from Games where UserID=$1::int and (ChallengeID=$2::uuid or GameID=$2::uuid)", [userId, challengeId]);
     if(response.rows.length>0){
         return res.redirect("/game/"+response.rows[0].gameid);
     }
@@ -173,7 +167,7 @@ app.post('/newgame/:id', require_auth, async (req,res) => {
         return;
     }
     if(req.body.challenge){
-        db_pool.query("update Games set ChallengeID=$1::integer where GameID=$1::integer", [gameid]);
+        db_pool.query("update Games set ChallengeID=$1::uuid where GameID=$1::uuid", [gameid]);
         res.redirect("/pregame/"+gameid);
     }
     else{
@@ -195,8 +189,8 @@ app.get("/playagain/:id", require_auth_game_id, async (req,res) => {
     res.redirect("/game/"+gameid);
 });
 app.post("/challenge/:id", require_auth, check_duplicate_challenge, async (req, res) => {
-    const challengeid = Number(req.params.id) || -1
-    const original_game = await db_pool.query("select * from Games where GameID=$1::int", [challengeid]);
+    const challengeid = req.params.id
+    const original_game = await db_pool.query("select * from Games where GameID=$1::uuid", [challengeid]);
     if(original_game.rows.length == 0 || original_game.rows[0].challengeid==null){
         return res.redirect("/maplist");
     }
@@ -206,7 +200,7 @@ app.post("/challenge/:id", require_auth, check_duplicate_challenge, async (req, 
         guesses:Array(5),
     };
     const mapid = original_game.rows[0].mapid;
-    const result = await db_pool.query("insert into Games (UserID, GameInfo, MapID, ChallengeID) values ($1::integer, $2::jsonb, $3::integer, $4::integer) returning GameID;", [req.session.passport.user.id, challenge_gameinfo, mapid, challengeid]);
+    const result = await db_pool.query("insert into Games (UserID, GameInfo, MapID, ChallengeID) values ($1::integer, $2::jsonb, $3::integer, $4::uuid) returning GameID;", [req.session.passport.user.id, challenge_gameinfo, mapid, challengeid]);
     const gameid = result.rows[0].gameid;
     res.redirect("/game/"+gameid);
 })
@@ -219,14 +213,14 @@ app.get("/creategame/:id", require_auth, async (req, res) => {
     res.render('creategame', with_username(map, req));
 });
 app.get("/pregame/:id", require_auth_game_id, async (req, res) => {
-    const game = await getGame(Number(req.params.id) || -1);
+    const game = await getGame(req.params.id);
     if(!game){
         res.redirect("/maplist")
     }
     res.render('pregame', with_username(game, req));
 });
 app.get("/challenge/:id", require_auth, check_duplicate_challenge, async (req, res) => {
-    const original_game = await db_pool.query("select Games.GameID, Games.GameInfo, Maps.MapName, Maps.MapID, Users.UserName as Challenger from Games left join Maps on Maps.MapID=Games.MapID left join Users on Users.UserID=Games.UserID where GameID=$1::int", [Number(req.params.id) || -1]);
+    const original_game = await db_pool.query("select Games.GameID, Games.GameInfo, Maps.MapName, Maps.MapID, Users.UserName as Challenger from Games left join Maps on Maps.MapID=Games.MapID left join Users on Users.UserID=Games.UserID where GameID=$1::uuid", [req.params.id]);
     if(original_game.rows.length == 0){
         return res.redirect("/maplist");
     }
@@ -254,7 +248,7 @@ app.ws("/gamesession/:id", async (ws, req) => {
         ws.close(3001, "Not authenticated");
         return
     }
-    const gameId = parseInt(req.params.id);
+    const gameId = req.params.id;
     const game = {};
     const backup = async () => backupGame(gameId, game);
     const refresh = async () => {
@@ -327,7 +321,7 @@ app.ws("/gamesession/:id", async (ws, req) => {
         if(!challengeId){
             return {};
         }
-        const rows = (await db_pool.query("select Games.GameInfo, Users.Username from Games left join Users on Users.UserID=Games.UserID where Games.ChallengeID=$1::integer or Games.GameID=$1::integer", [challengeId])).rows;
+        const rows = (await db_pool.query("select Games.GameInfo, Users.Username from Games left join Users on Users.UserID=Games.UserID where Games.ChallengeID=$1::uuid or Games.GameID=$1::uuid", [challengeId])).rows;
         const ans = {}
         for(const row of rows){
             const guesses = row.gameinfo.guesses;
@@ -379,7 +373,7 @@ app.ws("/gamesession/:id", async (ws, req) => {
                     total_time += game.guesses[i].elapsed;
                 }
                 
-                db_pool.query(`insert into HighScores (UserID, MapID, GameID, Score, Elapsed) with CurrentGame as (select UserID, MapID, GameID, $2::int as Score, $3::int as Elapsed from Games where GameID=$1::int) select UserID, MapID, GameID, Score, Elapsed from CurrentGame on conflict (UserID, MapID) do update set ${["GameID", "Score", "Elapsed"].map(col=>`${col}=case when excluded.Score>HighScores.Score or (excluded.Score=HighScores.Score and excluded.Elapsed<HighScores.Elapsed) then excluded.${col} else HighScores.${col} end`).join(',')};`,[gameId, score_so_far, total_time])
+                db_pool.query(`insert into HighScores (UserID, MapID, GameID, Score, Elapsed) with CurrentGame as (select UserID, MapID, GameID, $2::int as Score, $3::int as Elapsed from Games where GameID=$1::uuid) select UserID, MapID, GameID, Score, Elapsed from CurrentGame on conflict (UserID, MapID) do update set ${["GameID", "Score", "Elapsed"].map(col=>`${col}=case when excluded.Score>HighScores.Score or (excluded.Score=HighScores.Score and excluded.Elapsed<HighScores.Elapsed) then excluded.${col} else HighScores.${col} end`).join(',')};`,[gameId, score_so_far, total_time])
                 return get_game_results();
             },
             show_challengers:async ()=>{
@@ -594,7 +588,7 @@ app.get("/settings", require_auth, (req,res)=>{
     return res.render("settings", with_username({},req));
 });
 app.get("/duelroom/:id", require_auth, async (req,res)=>{
-    const result = await db_pool.query("select Maps.MapName, Maps.MapID from Duels left join Maps on Maps.MapID=Duels.MapID where DuelID=$1::int", [req.params.id]);
+    const result = await db_pool.query("select Maps.MapName, Maps.MapID from Duels left join Maps on Maps.MapID=Duels.MapID where DuelID=$1::uuid", [req.params.id]);
     if(!result.rows.length){
         return res.redirect("/maplist");
     }
@@ -602,7 +596,7 @@ app.get("/duelroom/:id", require_auth, async (req,res)=>{
     return res.render("duelroom", with_username({mapname,mapid},req));
 });
 app.ws("/duelroomsession/:id", async (ws,req) => {
-    const duelId = parseInt(req.params.id);
+    const duelId = req.params.id;
     const userId = req?.session?.passport?.user?.id;
     if(userId == null){
         ws.close(3001, "Not authenticated");
@@ -618,8 +612,8 @@ app.ws("/duelroomsession/:id", async (ws,req) => {
         return;
     }
     await client.query("begin;")
-    await client.query("select 67 from Duels where DuelID=$1::integer for update;",[duelId]);
-    const row = (await client.query("select Duels.DuelID, Duels.DuelInfo, Duels.MainUserID, Duels.MapID, Duels.Public, Duels.MaxPlayers, OwnerUsers.Username as ownername, array_agg(OpponentUsers.Username) as opponentnames,  Maps.MapName, Maps.ScoreModifier from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=any(Duels.OpponentUserIDs) left join Maps on Maps.MapID=Duels.MapID where DuelID=$1::integer group by Duels.DuelID, Duels.DuelInfo, Duels.MapID, ownername, Maps.MapName, Maps.ScoreModifier, Duels.MainUserID, Duels.Public, Duels.MaxPlayers", [duelId])).rows[0];
+    await client.query("select 67 from Duels where DuelID=$1::uuid for update;",[duelId]);
+    const row = (await client.query("select Duels.DuelID, Duels.DuelInfo, Duels.MainUserID, Duels.MapID, Duels.Public, Duels.MaxPlayers, OwnerUsers.Username as ownername, array_agg(OpponentUsers.Username) as opponentnames,  Maps.MapName, Maps.ScoreModifier from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=any(Duels.OpponentUserIDs) left join Maps on Maps.MapID=Duels.MapID where DuelID=$1::uuid group by Duels.DuelID, Duels.DuelInfo, Duels.MapID, ownername, Maps.MapName, Maps.ScoreModifier, Duels.MainUserID, Duels.Public, Duels.MaxPlayers", [duelId])).rows[0];
     if(!row){
         ws.close(3001, "Duel not found");
         return;
@@ -629,12 +623,12 @@ app.ws("/duelroomsession/:id", async (ws,req) => {
         ws.close(3001, "Duel started already");
         return;
     }
-    const notify_player_list = async () => client.query(`select pg_notify($1::text, CONCAT('{"type": "update_player_list", "info":{"owner":"', OwnerUsers.Username, '", "users":["', OwnerUsers.Username, '","' || array_to_string(array_agg(OpponentUsers.Username),'","'), '"]}}')) from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=ANY(Duels.OpponentUserIDs) where DuelID=$2::int group by OwnerUsers.Username`, [channelId, duelId]);
+    const notify_player_list = async () => client.query(`select pg_notify($1::text, CONCAT('{"type": "update_player_list", "info":{"owner":"', OwnerUsers.Username, '", "users":["', OwnerUsers.Username, '","' || array_to_string(array_agg(OpponentUsers.Username),'","'), '"]}}')) from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=ANY(Duels.OpponentUserIDs) where DuelID=$2::uuid group by OwnerUsers.Username`, [channelId, duelId]);
     const leave_room = async () => {
         await client.query("begin;");
-        await client.query("select 67 from Duels where DuelID=$1::int for update;", [duelId]);
+        await client.query("select 67 from Duels where DuelID=$1::uuid for update;", [duelId]);
         await client.query(`
-            update Duels set OpponentUserIDs=array_remove(OpponentUserIDs, $1::integer) where DuelID=$2::integer;
+            update Duels set OpponentUserIDs=array_remove(OpponentUserIDs, $1::integer) where DuelID=$2::uuid;
         `, [userId, duelId]);
         await notify_player_list();
         await client.query("commit");
@@ -670,7 +664,7 @@ app.ws("/duelroomsession/:id", async (ws,req) => {
     }
     else{
         const results = await client.query(`
-            update Duels set OpponentUserIDs=array_append(OpponentUserIDs, $2::integer) where DuelID=$1::int and (not $2::integer=any(OpponentUserIDs)) and (MaxPlayers is null or (1+coalesce(array_length(OpponentUserIDs,1), 0))<MaxPlayers);
+            update Duels set OpponentUserIDs=array_append(OpponentUserIDs, $2::integer) where DuelID=$1::uuid and (not $2::integer=any(OpponentUserIDs)) and (MaxPlayers is null or (1+coalesce(array_length(OpponentUserIDs,1), 0))<MaxPlayers);
         `, [duelId, userId]);
         if(results.rowCount==0){
             ws.close(3001, "Duel was already full");
@@ -703,13 +697,13 @@ app.ws("/duelroomsession/:id", async (ws,req) => {
                     teams:info.teams, //Will be validated/reformed when it actually starts
                 };
                 await client.query("begin;");
-                await client.query("select 67 from Duels where DuelID=$1::int for update;", [duelId]);
+                await client.query("select 67 from Duels where DuelID=$1::uuid for update;", [duelId]);
                 await client.query(`
-                    update Duels set DuelInfo=jsonb_set(DuelInfo, '{rules}', $2::jsonb, true), Public=$3::boolean, MaxPlayers=$4::integer where DuelID=$1::integer;
+                    update Duels set DuelInfo=jsonb_set(DuelInfo, '{rules}', $2::jsonb, true), Public=$3::boolean, MaxPlayers=$4::integer where DuelID=$1::uuid;
                 `, [duelId, filtered_info, public_room, max_players]);
                 await client.query(`select pg_notify($1::text, '{"type":"update_rules", "info":' || jsonb_pretty(
                     jsonb_set(jsonb_set(DuelInfo->'rules', '{max_players}', coalesce(MaxPlayers::text::jsonb,'null'::jsonb), true), '{public}', Public::text::jsonb, true)
-                ) || '}') from Duels where DuelID=$2::integer;
+                ) || '}') from Duels where DuelID=$2::uuid;
                 `, [channelId, duelId]);
                 await client.query("commit;");
             }
@@ -718,8 +712,8 @@ app.ws("/duelroomsession/:id", async (ws,req) => {
             if(is_owner){
                 await client.query("begin");
                 //Create teams from rules
-                await client.query("select 67 from Duels where DuelID=$1::integer for update;",[duelId]);
-                const result = await client.query("select Duels.DuelInfo, OwnerUsers.Username as ownername, array_agg(OpponentUsers.Username) as opponentnames from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=any(Duels.OpponentUserIDs) where DuelID=$1::int group by Duels.DuelInfo, ownername;", [duelId]);
+                await client.query("select 67 from Duels where DuelID=$1::uuid for update;",[duelId]);
+                const result = await client.query("select Duels.DuelInfo, OwnerUsers.Username as ownername, array_agg(OpponentUsers.Username) as opponentnames from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=any(Duels.OpponentUserIDs) where DuelID=$1::uuid group by Duels.DuelInfo, ownername;", [duelId]);
                 const rules = result.rows[0].duelinfo.rules;
                 const unaccounted_players = new Set([result.rows[0].ownername, ...result.rows[0].opponentnames]);
                 const new_teams = {};
@@ -742,7 +736,7 @@ app.ws("/duelroomsession/:id", async (ws,req) => {
                 rules.teams = new_teams;
                 rules.ready = true;
                 await client.query(`
-                    update Duels set DuelInfo=jsonb_set(DuelInfo, '{rules}', $2::jsonb, true) where DuelID=$1::integer and (DuelInfo#>'{rules,ready}')::boolean is not true;
+                    update Duels set DuelInfo=jsonb_set(DuelInfo, '{rules}', $2::jsonb, true) where DuelID=$1::uuid and (DuelInfo#>'{rules,ready}')::boolean is not true;
                 `, [duelId, rules]);
                 await client.query(`
                     select pg_notify($1::text, '{"type":"start_duel"}');
@@ -770,7 +764,7 @@ app.ws("/duelsession/:id", async (ws, req) => {
         ws.close(3001, "Not authenticated");
         return
     }
-    const duelId = parseInt(req.params.id);
+    const duelId = req.params.id;
 
     const client = new pg.Client();
     await client.connect()
@@ -779,8 +773,8 @@ app.ws("/duelsession/:id", async (ws, req) => {
     const duelrow = {}
     try{
 
-        await client.query("select 67 from Duels where DuelID=$1::integer for update;",[duelId]);
-        const row = (await client.query('select Duels.DuelInfo, Duels.MapID, Maps.MapName, Maps.MapID, OwnerUsers.Username as OwnerName, array_agg(OpponentUsers.Username) as OpponentNames from Duels left join Maps on Duels.MapID=Maps.MapID left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=ANY(Duels.OpponentUserIDs) where DuelID=$1::integer group by Duels.DuelInfo, Duels.MapID, Maps.MapName, Maps.MapID, OwnerName;', [duelId])).rows[0];
+        await client.query("select 67 from Duels where DuelID=$1::uuid for update;",[duelId]);
+        const row = (await client.query('select Duels.DuelInfo, Duels.MapID, Maps.MapName, Maps.MapID, OwnerUsers.Username as OwnerName, array_agg(OpponentUsers.Username) as OpponentNames from Duels left join Maps on Duels.MapID=Maps.MapID left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=ANY(Duels.OpponentUserIDs) where DuelID=$1::uuid group by Duels.DuelInfo, Duels.MapID, Maps.MapName, Maps.MapID, OwnerName;', [duelId])).rows[0];
         Object.assign(duelrow, row);
     }
     catch{
@@ -861,14 +855,14 @@ app.ws("/duelsession/:id", async (ws, req) => {
     const finish_round = async (round_idx) =>{
         const now = Date.now();
         await client.query("begin;");
-        const duelinfo = (await client.query("select Duels.DuelInfo from Duels where DuelID=$1::int for update;", [duelId])).rows[0].duelinfo;
+        const duelinfo = (await client.query("select Duels.DuelInfo from Duels where DuelID=$1::uuid for update;", [duelId])).rows[0].duelinfo;
         duelinfo.finishTimes[round_idx] = Date.now();
-        const res = await client.query(`update Duels set DuelInfo=$3::jsonb where DuelID=$1::int and jsonb_array_length(DuelInfo->'finishTimes')=$2::int`, [duelId, round_idx, duelinfo]);
+        const res = await client.query(`update Duels set DuelInfo=$3::jsonb where DuelID=$1::uuid and jsonb_array_length(DuelInfo->'finishTimes')=$2::int`, [duelId, round_idx, duelinfo]);
         if(res.rowCount>0){
             await client.query(`select pg_notify($1::text, '{"type":"finish_round","info":{
             "index":' || $2::integer 
             || ', "finish_time":' || (DuelInfo->'finishTimes'->$2::integer) 
-            || '}}') from Duels where DuelID=$3::int`, [channelId, round_idx, duelId]);
+            || '}}') from Duels where DuelID=$3::uuid`, [channelId, round_idx, duelId]);
         }
         else{
             send_current_state();
@@ -917,7 +911,7 @@ app.ws("/duelsession/:id", async (ws, req) => {
     const add_new_round = async (round_idx) =>{
         //Check if the game has already ended
         await client.query("begin;");
-        const duelinfo = (await client.query("select Duels.DuelInfo from Duels where DuelID=$1::int for update;", [duelId])).rows[0].duelinfo;
+        const duelinfo = (await client.query("select Duels.DuelInfo from Duels where DuelID=$1::uuid for update;", [duelId])).rows[0].duelinfo;
         if(round_idx==0){
             duelinfo.health_before[round_idx] = {};
             for(const teamname of Object.keys(duel.rules.teams)){
@@ -949,7 +943,7 @@ app.ws("/duelsession/:id", async (ws, req) => {
         }
         duelinfo.guesses[round_idx] = {};
         duelinfo.startTimes[round_idx] = Date.now();
-        const res = await client.query(`update Duels set DuelInfo=$3::jsonb where DuelID=$1::int and jsonb_array_length(DuelInfo->'locations')=$2::int`, [duelId, round_idx, duelinfo]);
+        const res = await client.query(`update Duels set DuelInfo=$3::jsonb where DuelID=$1::uuid and jsonb_array_length(DuelInfo->'locations')=$2::int`, [duelId, round_idx, duelinfo]);
 
         if(res.rowCount>0){
             await client.query(`select pg_notify($1::text, '{"type":"new_round","info":{
@@ -957,7 +951,7 @@ app.ws("/duelsession/:id", async (ws, req) => {
                 || ', "location":' || (DuelInfo->'locations'->$2::integer) 
                 || ', "start_time":' || (DuelInfo->'startTimes'->$2::integer) 
                 || ', "health_before":' || (DuelInfo->'health_before'->$2::integer) 
-                || '}}') from Duels where DuelID=$3::int`, [channelId, round_idx, duelId]);
+                || '}}') from Duels where DuelID=$3::uuid`, [channelId, round_idx, duelId]);
         }
         else{
             send_current_state();
@@ -1020,13 +1014,13 @@ app.ws("/duelsession/:id", async (ws, req) => {
         result.final = final && Date.now();
         const username = req.session.passport.user.username;
         await client.query('begin');
-        await client.query('select 67 from Duels where DuelID=$1::int for update;',[duelId]);
+        await client.query('select 67 from Duels where DuelID=$1::uuid for update;',[duelId]);
         const res = await client.query(`
-            update Duels set DuelInfo=jsonb_set(DuelInfo, ARRAY['guesses', $3::text, $2::text], $4::jsonb, true) where DuelID=$1::int and 
+            update Duels set DuelInfo=jsonb_set(DuelInfo, ARRAY['guesses', $3::text, $2::text], $4::jsonb, true) where DuelID=$1::uuid and 
             jsonb_typeof(DuelInfo->'guesses'->$3::integer->$2::text->'final') is distinct from 'number';
         `,[duelId, username, round, result]);
         if(res.rowCount>0){
-            await client.query(`select pg_notify($2::text, '{"type":"update_guess", "info":{"round":' || $3::integer || ', "user": "' || $4::text || '", "guess":' || (DuelInfo->'guesses'->$3::integer->$4::text) || '}}') from Duels where DuelID=$1::int;`,[duelId, channelId, round, username]);
+            await client.query(`select pg_notify($2::text, '{"type":"update_guess", "info":{"round":' || $3::integer || ', "user": "' || $4::text || '", "guess":' || (DuelInfo->'guesses'->$3::integer->$4::text) || '}}') from Duels where DuelID=$1::uuid;`,[duelId, channelId, round, username]);
         }
         else{
             send_current_state();
@@ -1070,8 +1064,8 @@ app.ws("/duelsession/:id", async (ws, req) => {
 });
 
 app.get("/duelagain/:id", require_auth, async (req,res) => {
-    const duelId = Number(req.params.id);
-    const result = (await db_pool.query("select DuelInfo, MainUserID, MapID from Duels where DuelID=$1::integer", [duelId])).rows[0];
+    const duelId = req.params.id;
+    const result = (await db_pool.query("select DuelInfo, MainUserID, MapID from Duels where DuelID=$1::uuid", [duelId])).rows[0];
     if(!result){
         return res.redirect("/maplist");
     }
@@ -1099,7 +1093,7 @@ app.get("/duelagain/:id", require_auth, async (req,res) => {
     }
     const channelId = `duel_${duelId}`;
     //Redirect other users in the original duel to the new one
-    await db_pool.query(`select pg_notify($1::text, '{"type":"new_duel", "info":' || DuelID || '}') from Duels where DuelID=$2::integer`, [channelId, new_duelId]);
+    await db_pool.query(`select pg_notify($1::text, '{"type":"new_duel", "info":"' || DuelID || '"}') from Duels where DuelID=$2::uuid`, [channelId, new_duelId]);
     res.redirect("/duelroom/"+new_duelId);
 });
 
