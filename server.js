@@ -623,7 +623,8 @@ app.ws("/duelroomsession/:id", async (ws,req) => {
         ws.close(3001, "Duel started already");
         return;
     }
-    const notify_player_list = async () => client.query(`select pg_notify($1::text, CONCAT('{"type": "update_player_list", "info":{"owner":"', OwnerUsers.Username, '", "users":["', OwnerUsers.Username, '","' || array_to_string(array_agg(OpponentUsers.Username),'","'), '"]}}')) from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=ANY(Duels.OpponentUserIDs) where DuelID=$2::uuid group by OwnerUsers.Username`, [channelId, duelId]);
+
+    const notify_player_list = async () => client.query(`select pg_notify($1::text, jsonb_build_object('type','update_player_list','info',jsonb_build_object('owner',OwnerUsers.Username,'users',jsonb_build_array(OwnerUsers.Username) || to_jsonb(array_remove(array_agg(OpponentUsers.Username),null))))::text) from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=ANY(Duels.OpponentUserIDs) where DuelID=$2::uuid group by OwnerUsers.Username`, [channelId, duelId]);
     const leave_room = async () => {
         await client.query("begin;");
         await client.query("select 67 from Duels where DuelID=$1::uuid for update;", [duelId]);
@@ -701,9 +702,8 @@ app.ws("/duelroomsession/:id", async (ws,req) => {
                 await client.query(`
                     update Duels set DuelInfo=jsonb_set(DuelInfo, '{rules}', $2::jsonb, true), Public=$3::boolean, MaxPlayers=$4::integer where DuelID=$1::uuid;
                 `, [duelId, filtered_info, public_room, max_players]);
-                await client.query(`select pg_notify($1::text, '{"type":"update_rules", "info":' || jsonb_pretty(
-                    jsonb_set(jsonb_set(DuelInfo->'rules', '{max_players}', coalesce(MaxPlayers::text::jsonb,'null'::jsonb), true), '{public}', Public::text::jsonb, true)
-                ) || '}') from Duels where DuelID=$2::uuid;
+
+                await client.query(`select pg_notify($1::text, jsonb_build_object('type','update_rules','info',jsonb_set(jsonb_set(DuelInfo->'rules', '{max_players}', coalesce(MaxPlayers::text::jsonb,'null'::jsonb), true), '{public}', Public::text::jsonb, true))::text) from Duels where DuelID=$2::uuid;
                 `, [channelId, duelId]);
                 await client.query("commit;");
             }
@@ -739,7 +739,7 @@ app.ws("/duelroomsession/:id", async (ws,req) => {
                     update Duels set DuelInfo=jsonb_set(DuelInfo, '{rules}', $2::jsonb, true) where DuelID=$1::uuid and (DuelInfo#>'{rules,ready}')::boolean is not true;
                 `, [duelId, rules]);
                 await client.query(`
-                    select pg_notify($1::text, '{"type":"start_duel"}');
+                    select pg_notify($1::text, jsonb_build_object('type','start_duel')::text);
                 `, [channelId]);
                 await client.query("commit");
             }
@@ -859,10 +859,8 @@ app.ws("/duelsession/:id", async (ws, req) => {
         duelinfo.finishTimes[round_idx] = Date.now();
         const res = await client.query(`update Duels set DuelInfo=$3::jsonb where DuelID=$1::uuid and jsonb_array_length(DuelInfo->'finishTimes')=$2::int`, [duelId, round_idx, duelinfo]);
         if(res.rowCount>0){
-            await client.query(`select pg_notify($1::text, '{"type":"finish_round","info":{
-            "index":' || $2::integer 
-            || ', "finish_time":' || (DuelInfo->'finishTimes'->$2::integer) 
-            || '}}') from Duels where DuelID=$3::uuid`, [channelId, round_idx, duelId]);
+
+            await client.query(`select pg_notify($1::text, jsonb_build_object('type','finish_round','info',jsonb_build_object('index',$2::integer,'finish_time',(DuelInfo->'finishTimes'->$2::integer)))::text) from Duels where DuelID=$3::uuid`, [channelId, round_idx, duelId]);
         }
         else{
             send_current_state();
@@ -946,12 +944,8 @@ app.ws("/duelsession/:id", async (ws, req) => {
         const res = await client.query(`update Duels set DuelInfo=$3::jsonb where DuelID=$1::uuid and jsonb_array_length(DuelInfo->'locations')=$2::int`, [duelId, round_idx, duelinfo]);
 
         if(res.rowCount>0){
-            await client.query(`select pg_notify($1::text, '{"type":"new_round","info":{
-                "index":' || $2::integer 
-                || ', "location":' || (DuelInfo->'locations'->$2::integer) 
-                || ', "start_time":' || (DuelInfo->'startTimes'->$2::integer) 
-                || ', "health_before":' || (DuelInfo->'health_before'->$2::integer) 
-                || '}}') from Duels where DuelID=$3::uuid`, [channelId, round_idx, duelId]);
+
+            await client.query(`select pg_notify($1::text, jsonb_build_object('type','new_round','info',jsonb_build_object('index',$2::integer,'location',(DuelInfo->'locations'->$2::integer),'start_time',(DuelInfo->'startTimes'->$2::integer),'health_before',(DuelInfo->'health_before'->$2::integer)))::text) from Duels where DuelID=$3::uuid`, [channelId, round_idx, duelId]);
         }
         else{
             send_current_state();
@@ -1020,7 +1014,7 @@ app.ws("/duelsession/:id", async (ws, req) => {
             jsonb_typeof(DuelInfo->'guesses'->$3::integer->$2::text->'final') is distinct from 'number';
         `,[duelId, username, round, result]);
         if(res.rowCount>0){
-            await client.query(`select pg_notify($2::text, '{"type":"update_guess", "info":{"round":' || $3::integer || ', "user": "' || $4::text || '", "guess":' || (DuelInfo->'guesses'->$3::integer->$4::text) || '}}') from Duels where DuelID=$1::uuid;`,[duelId, channelId, round, username]);
+            await client.query(`select pg_notify($2::text, jsonb_build_object('type','update_guess','info',jsonb_build_object('round',$3::integer,'user',$4::text,'guess',(DuelInfo->'guesses'->$3::integer->$4::text)))::text) from Duels where DuelID=$1::uuid;`,[duelId, channelId, round, username]);
         }
         else{
             send_current_state();
@@ -1093,7 +1087,7 @@ app.get("/duelagain/:id", require_auth, async (req,res) => {
     }
     const channelId = `duel_${duelId}`;
     //Redirect other users in the original duel to the new one
-    await db_pool.query(`select pg_notify($1::text, '{"type":"new_duel", "info":"' || DuelID || '"}') from Duels where DuelID=$2::uuid`, [channelId, new_duelId]);
+    await db_pool.query(`select pg_notify($1::text, jsonb_build_object('type','new_duel','info',DuelID)::text) from Duels where DuelID=$2::uuid`, [channelId, new_duelId]);
     res.redirect("/duelroom/"+new_duelId);
 });
 
