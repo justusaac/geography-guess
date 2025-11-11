@@ -52,6 +52,7 @@ class MysteryPano{
 			["size-button decrease",this.adjust_expanded_map.bind(this, false)],
 			["breadcrumb-start-btn",this.place_breadcrumbs.bind(this)],
 			["breadcrumb-return-btn",this.follow_breadcrumbs.bind(this)],
+			["breadcrumb-both-btn",this.place_and_follow_breadcrumbs.bind(this)],
 			["step-back-btn",this.step_back.bind(this)],
 			["close-error",this.hide_error.bind(this)]
 		]
@@ -210,11 +211,12 @@ class MysteryPano{
 		for(const btn of this.root.getElementsByClassName("breadcrumb-return-btn")){
 			btn.disabled = true
 		}
+		for(const btn of this.root.getElementsByClassName("breadcrumb-both-btn")){
+			btn.disabled = true
+		}
 		this.breadcrumb = null
-		for(const classname of ["breadcrumb-start-btn","breadcrumb-return-btn","step-back-btn","reset-pos-btn"]){
-			for(const elem of this.root.getElementsByClassName(classname)){
-				elem.style.visibility = this.game_info.rules.moving ? "visible" : "collapse";
-			}
+		for(const elem of this.root.getElementsByClassName("movement-btn")){
+			elem.style.visibility = this.game_info.rules.moving ? "visible" : "collapse";
 		}
 		for(const container of this.root.getElementsByClassName("map-container")){
 			container.appendChild(this.map.getDiv());
@@ -279,7 +281,9 @@ class MysteryPano{
 			el.style.setProperty('--timer-progress',`${curr_progress}`);
 			clearInterval(el.timer_interval);
 			const update_timer_msg = ()=>{
-				const time_left = duration-(Date.now()-start_time)
+				const elapsed = Date.now()-start_time;
+				const time_left = duration-elapsed;
+				const progress = elapsed/duration
 				if(time_left<0){
 					clearInterval(el.timer_interval);
 					//timer_reminder has no special meaning but any message will trigger the server to check the time limit
@@ -287,12 +291,15 @@ class MysteryPano{
 					return;
 				}
 				el.style.setProperty('--timer-message', '"'+MysteryPano.format_time(time_left,duration)+'"');
+
+				el.style.setProperty('--timer-duration','0s');
+				el.style.setProperty('--timer-progress',`${progress}`);
+				el.offsetHeight;
+				el.style.setProperty('--timer-duration',`${time_left}ms`);
+				el.style.setProperty('--timer-progress','1');
 			}
 			el.timer_interval = setInterval(update_timer_msg, 100);
 			update_timer_msg();
-			el.offsetHeight;
-			el.style.setProperty('--timer-duration',`${duration-(now-start_time)}ms`);
-			el.style.setProperty('--timer-progress','1');
 		}
 	}
 	step_back(){
@@ -335,11 +342,19 @@ class MysteryPano{
 		for(const btn of this.root.getElementsByClassName("breadcrumb-return-btn")){
 			btn.disabled = false
 		}
+		for(const btn of this.root.getElementsByClassName("breadcrumb-both-btn")){
+			btn.disabled = false
+		}
 	}
 	follow_breadcrumbs(){
 		if(this.breadcrumb){
 			this.pano.setPosition(this.breadcrumb);
 		}
+	}
+	place_and_follow_breadcrumbs(){
+		const new_breadcrumb = this.pano.getPosition();
+		this.follow_breadcrumbs();
+		this.breadcrumb = new_breadcrumb;
 	}
 	adjust_expanded_map(increase){
 		const heights = [50, 80, 90];

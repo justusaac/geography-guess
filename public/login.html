@@ -21,7 +21,7 @@
 				window.location.href = response.url;
 				return;
 			}
-			window.location.href = decodeURIComponent(destination);
+			window.location.href = window.location.origin + decodeURIComponent(destination);
 		}
 		async function sendForm(event){
 			event.preventDefault();

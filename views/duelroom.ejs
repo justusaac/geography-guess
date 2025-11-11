@@ -228,7 +228,7 @@ const url = "ws://"+window.location.host+"/duelroomsession/"+duelid;
 const socket = new WebSocket(url);
 socket.addEventListener("close", (evt)=>show_error(evt));
 socket.addEventListener("message", msg => {
-	console.log(msg.data)
+	//console.log(msg.data)
 	const data = JSON.parse(msg.data);
 	const {type,info} = data;
 	if(type == "update_rules"){

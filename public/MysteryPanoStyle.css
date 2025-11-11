@@ -253,5 +253,6 @@ html,body{
 .movement-btn{
 	display:block;
 	width:100%;
+	font-size:12px;
 	padding: 0.25em 0px;
 }
