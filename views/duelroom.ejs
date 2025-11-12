@@ -39,10 +39,22 @@
 		#team_count, #max_player_count{
 			width:4em;
 		}
+		.team-name-input{
+			font-size:110%;
+		}
+		.user-list-element{
+			padding:1px;
+		}
+		.spacer{
+			&::marker{
+				content:"";
+			}
+		}
 	</style>
 	<script>
 		var global_teams;
 		var global_user_info;
+		var global_team_order = [];
 		function update_rules(rules){
 			for(const suffix of ['','_after_guess']){
 				for(const elem of document.getElementsByName('time_limit'+suffix)){
@@ -114,41 +126,95 @@
 		function update_player_list(info){
 			global_user_info = info;
 			const {owner, users} = info;
+
+			if(global_teams!=null){
+				const new_team_order = []
+				const found_teams = new Set();
+				for(const i in global_team_order){
+					team = global_team_order[i];
+					if(global_teams[team]){
+						new_team_order[i] = team;
+						found_teams.add(team);
+					}
+				}
+				let i=0;
+				for(const team in global_teams || {}){
+					if(found_teams.has(team)){
+						continue;
+					}
+					while(new_team_order[i]!=null){
+						i++;
+					}
+					new_team_order[i] = team;
+				}
+				global_team_order = new_team_order.filter(Boolean);
+			}
+			const create_user_entry = (user)=>{
+				const li = document.createElement('li');
+				li.classList.add("user-list-element");
+				const txt = document.createTextNode('');
+				if(global_teams!=null){
+					txt.textContent += " ";
+					const select = document.createElement('select');
+					select.classList.add("team-selector");
+					select.dataset.user = user
+					const unassigned_option = document.createElement('option');
+					unassigned_option.value = "";
+					unassigned_option.innerHTML = "Unassigned"
+					select.appendChild(unassigned_option);
+					select.value = unassigned_option.value;
+					for(const team of global_team_order){
+						const option = document.createElement('option');
+						option.value = team;
+						option.textContent = team;
+						select.appendChild(option);
+						if(global_teams?.[team]?.includes(user)){
+							select.value = team;
+						}
+					}
+					li.appendChild(select);
+				}
+				txt.textContent += user;
+				if(user === owner){
+					txt.textContent += " (Leader)";
+				}
+				if(user === "<%= username %>"){
+					li.style.backgroundColor='#fffab0';
+				}
+				li.appendChild(txt);
+				return li;
+			}
 			for(const root of document.getElementsByClassName("player-list")){
 				root.innerHTML = '';
-				for(const user of users){
-					const li = document.createElement('li');
-					const txt = document.createTextNode('');
-					if(document.getElementById("team-box").checked){
-						txt.textContent += " ";
-						global_teams ??= {}
-						const select = document.createElement('select');
-						select.classList.add("team-selector");
-						select.dataset.user = user
-						const unassigned_option = document.createElement('option');
-						unassigned_option.value = "";
-						unassigned_option.innerHTML = "Unassigned"
-						select.appendChild(unassigned_option);
-						for(const team in global_teams){
-							const option = document.createElement('option');
-							option.value = team;
-							option.textContent = team;
-							select.appendChild(option);
-							if(global_teams[team].includes(user)){
-								select.value = team;
-							}
+				const found_users = new Set();
+				for(const team of global_teams ? global_team_order : []){
+					const team_li = document.createElement('li');
+					const inp = document.createElement('input');
+					inp.type = "text"
+					inp.value = team
+					inp.name = team
+					inp.classList.add('team-name-input')
+					team_li.appendChild(inp);
+					root.appendChild(team_li);
+					const players_ul = document.createElement('ul');
+					for(const player of global_teams[team] ?? []){
+						if(!users.includes(player)){
+							continue;
 						}
-						li.appendChild(select);
+						players_ul.appendChild(create_user_entry(player));
+						found_users.add(player);
 					}
-					txt.textContent += user;
-					if(user === owner){
-						txt.textContent += " (Leader)";
+					team_li.appendChild(players_ul);
+				}
+				const spacing_li = document.createElement('li');
+				spacing_li.classList.add("spacer");
+				spacing_li.appendChild(document.createElement('hr'));
+				root.appendChild(spacing_li);
+				for(const user of users){
+					if(found_users.has(user)){
+						continue;
 					}
-					if(user === "<%= username %>"){
-						txt.textContent += " (You)";
-					}
-					li.appendChild(txt);
-					root.appendChild(li);
+					root.appendChild(create_user_entry(user));
 				}
 			}
 			
@@ -267,6 +333,13 @@ form.addEventListener('change',(evt)=>{
 				info.teams[elem.value].push(user);
 			}
 		}
+		for(const inp of document.getElementsByClassName('team-name-input')){
+			if(!(inp.value && inp.name) || inp.value==inp.name){
+				continue;
+			}
+			info.teams[inp.value] = info.teams[inp.name]
+			delete info.teams[inp.name];
+		}
 		const team_count = Math.max(2,document.getElementById("team_count").value);
 		const team_name_set = new Set(Object.keys(info.teams));
 		for(let i=1; Object.keys(info.teams).length<team_count; i++){
@@ -275,8 +348,9 @@ form.addEventListener('change',(evt)=>{
 				info.teams[teamname] = []
 			}
 		}
+		const team_order = global_team_order.length ? global_team_order : [...Object.keys(info.teams)]
 		while(Object.keys(info.teams).length>team_count){
-			delete info.teams[Object.keys(info.teams)[Object.keys(info.teams).length-1]]
+			delete info.teams[team_order[team_order.length-1]]
 		}
 	}
 	else{
