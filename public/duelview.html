@@ -234,6 +234,18 @@
 					this.team_markers.pop().setMap(null);
 				}
 			}
+			get_multiplier(round_idx){
+		        const first_round = this.game_info.rules.first_multiplier_round;
+		        const step = this.game_info.rules.multiplier_increase;
+		        if(!first_round || !step){
+		            return 1;
+		        }
+		        if((round_idx+1)<first_round){
+		            return 1;
+		        }
+		        //scaling factor to dodge floating point errors
+		        return 1+((step*100)*((round_idx+1)-(first_round-1)))/100;
+		    }
 			show_round_results(round_data){
 				this.pano?.setPano("NOPANO");
 				const curr_msg = {round:round_data.round, type:"round_results"};
@@ -246,6 +258,7 @@
 
 				const max_score = Math.max(0, ...Object.values(round_data.guesses).map(x=>x.score));
 				const you_team = Object.keys(this.game_info.rules.teams).filter(t=>this.game_info.rules.teams[t].includes(this.game_info.you))[0];
+				const damage_multiplier = this.get_multiplier(round_data.round);
 				const team_guesses = {};
 				for(const team in this.game_info.rules.teams){
 					const guesses = []
@@ -276,7 +289,7 @@
 					elem.innerHTML = '';
 					const your_score = team_best_guesses[you_team]?.score || 0;
 					const span = document.createElement('span');
-					span.innerHTML = (your_score == max_score) ? `${your_score} points, you win this round!` : `You lost ${max_score-your_score} health.`
+					span.innerHTML = (your_score == max_score) ? `${your_score} points, you win this round!` : `You lost ${max_score-your_score}${damage_multiplier==1 ? '' : ` * ${damage_multiplier} = ${Math.floor((max_score-your_score)*damage_multiplier)}`} health.`
 					elem.appendChild(span);
 					elem.appendChild(document.createElement("br"));
 					const table = document.createElement("table");
@@ -312,7 +325,7 @@
 
 							const health_before = round_data.health_before[team];
 							const max_health = this.game_info.rules.max_health;
-							const damage = Math.min(max_score-(team_best_guesses[team]?.score || 0), health_before);
+							const damage = Math.floor(Math.min((max_score-(team_best_guesses[team]?.score || 0))*damage_multiplier, health_before));
 							const health_after = health_before - damage;
 							const tr = document.createElement('tr');
 							table.appendChild(tr);

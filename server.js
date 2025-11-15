@@ -38,6 +38,7 @@ app.use(express.static(__dirname+'/public'));
 app.set("view engine", "ejs");
 app.set("views", __dirname+"/views");
 
+
 async function getGame(id){
     const result = await db_pool.query('select Games.*, Maps.MapName, Maps.MapID, Maps.ScoreModifier from Games left join Maps on Games.MapID=Maps.MapID where GameID=$1::uuid;', [id]);
     return result.rows[0];
@@ -699,6 +700,8 @@ app.ws("/duelroomsession/:id", async (ws,req) => {
                     time_limit_after_guess:info.time_limit_after_guess==null ? info.time_limit_after_guess : Number(info.time_limit_after_guess),
                     max_health: Math.abs(Number(info.max_health)) || 1,
                     scoremodifier:row.scoremodifier,
+                    first_multiplier_round:Math.abs(Number(info.first_multiplier_round)),
+                    multiplier_increase:Number(info.multiplier_increase),
                     teams:info.teams, //Will be validated/reformed when it actually starts
                 };
                 await client.query("begin;");
@@ -812,6 +815,18 @@ app.ws("/duelsession/:id", async (ws, req) => {
             score:points,
             distance
         };
+    };
+    const get_multiplier = (round_idx)=>{
+        const first_round = duel.rules.first_multiplier_round;
+        const step = duel.rules.multiplier_increase;
+        if(!first_round || !step){
+            return 1;
+        }
+        if((round_idx+1)<first_round){
+            return 1;
+        }
+        //scaling factor to dodge floating point errors
+        return 1+((step*100)*((round_idx+1)-(first_round-1)))/100;
     };
 
     const send_current_state = ()=>{
@@ -929,7 +944,9 @@ app.ws("/duelsession/:id", async (ws, req) => {
             for(const team in last_round_health){
                 const team_guesses = duel.rules.teams[team].map(player=>last_round_guesses[player]);
                 const max_score_team = team_guesses.reduce((acc,curr)=>Math.max(acc,(curr?.score ?? 0)),0);
-                const new_health = Math.max(0,last_round_health[team]-(max_score-max_score_team));
+                const multiplier = get_multiplier(round_idx-1);
+                const damage = Math.floor((max_score-max_score_team)*multiplier);
+                const new_health = Math.max(0,last_round_health[team]-damage);
                 duelinfo.health_before[round_idx][team] = new_health;
             }
         }
@@ -1121,7 +1138,7 @@ app.get("/dailychallenge", async (req,res)=>{
         }
         const {scoremodifier} = (await db_pool.query("select ScoreModifier from Maps where MapID=$1::int",[worldmapid])).rows[0];
         const rules = {
-            time_limit:120000,
+            time_limit:1000*60*2,
             moving:true,
             panning:true,
             zooming:true,

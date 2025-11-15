@@ -670,7 +670,8 @@ class MysteryPano{
 				for(let i=0; i<game_info.locations.length; i++){
 					total_score += guesses[i].score;
 					total_elapsed += guesses[i].elapsed;
-					add_text_to_fragment(`<td>${guesses[i].score} points<br>${MysteryPano.format_distance(guesses[i].distance)}<br>${MysteryPano.format_elapsed(guesses[i].elapsed)}</td>`, row);
+					const no_guess = guesses[i].distance==0 && guesses[i].score==0;
+					add_text_to_fragment(`<td>${guesses[i].score} points<br>${no_guess ? "No guess" : MysteryPano.format_distance(guesses[i].distance)}<br>${MysteryPano.format_elapsed(guesses[i].elapsed)}</td>`, row);
 				}
 				add_text_to_fragment(`<td><b style="border:none;">${total_score} points</b><br>${MysteryPano.format_elapsed(total_elapsed)}</td>`, row);
 				table.appendChild(row);

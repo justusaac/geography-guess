@@ -122,6 +122,22 @@
 			if(global_user_info!=null){
 				update_player_list(global_user_info);
 			}
+			const multipliers_enabled = Boolean(rules.first_multiplier_round && rules.multiplier_increase)
+			for(const elem of document.getElementsByName("multipliers")){
+				elem.checked = multipliers_enabled;
+			}
+			for(const elem of document.getElementsByClassName("multipliers-adjustment")){
+				elem.style.display = multipliers_enabled ? "revert" : "none";
+			}
+			if(multipliers_enabled){
+
+				for(const elem of document.getElementsByName("multipliers_step")){
+					elem.value = rules.multiplier_increase;
+				}
+				for(const elem of document.getElementsByName("multipliers_start")){
+					elem.value = rules.first_multiplier_round;
+				}
+			}
 		}
 		function update_player_list(info){
 			global_user_info = info;
@@ -277,6 +293,12 @@
 			<label for="time-limit-after-guess-box">Time Limit after guess </label><input type="checkbox" name="time_limit_after_guess" id="time-limit-after-guess-box"><input type="number" min="0" max="999" name="time_limit_minutes_after_guess"> min <input type="number" min="0" max="59" name="time_limit_seconds_after_guess"> sec 
 			<br>
 			<label for="max-health-input">Starting Health </label><input type="number" name="max_health" id="max-health-input" step="1000" min="0">
+			<br>
+			<label for="multipliers-box">Multipliers </label><input type="checkbox" name="multipliers" id="multipliers-box">
+			<ul style="margin:0">
+				<li class="multipliers-adjustment"><input type="number" min="2" max="999" name="multipliers_start"> First round</li>
+				<li class="multipliers-adjustment"><input type="number" min="0" max="1" step="0.1" name="multipliers_step"> Increase rate</li>
+			</ul>
 		</span>
 		<span class="player-list-container">
 			<label for="team-box">Teams</label><input type="checkbox" id="team-box" name="teams"><input type="number" min="2" name="team_count" id="team_count" value="2">
@@ -288,88 +310,91 @@
 	</form>
 	<button disabled class="start-button">Start Duel</button>
 	<script>
-const path = window.location.pathname.split('/');
-const duelid = path[path.length-1];
-const url = "ws://"+window.location.host+"/duelroomsession/"+duelid;
-const socket = new WebSocket(url);
-socket.addEventListener("close", (evt)=>show_error(evt));
-socket.addEventListener("message", msg => {
-	//console.log(msg.data)
-	const data = JSON.parse(msg.data);
-	const {type,info} = data;
-	if(type == "update_rules"){
-		update_rules(info);
-	}
-	else if(type == "update_player_list"){
-		update_player_list(info);
-	}
-	else if(type == "start_duel"){
-		window.location.replace("/duel/"+duelid);
-	}
-})
-const form = document.getElementById("rules-form");
-form.addEventListener('change',(evt)=>{
-	const fd = Object.fromEntries((new FormData(form)).entries());
-	const info = {};
-	info.moving = (fd["freedom"]=="moving");
-	info.panning = (info.zooming = (fd["freedom"] != "nmpz"));
-	info.max_health = fd["max_health"]
-	for(const suffix of ['','_after_guess']){
-		info["time_limit"+suffix] = fd["time_limit"+suffix] 
-			? 1000 * ((parseInt(fd["time_limit_minutes"+suffix])||0)*60+(parseInt(fd["time_limit_seconds"+suffix])||0)) 
-			: null;
-	}
-	if(fd["teams"]){
-		info.teams = {};
-		for(const elem of document.getElementsByClassName("team-selector")){
-			const {user} = elem.dataset;
-			for(const team of elem.options){
-				if(!team.value){
-					continue;
-				}
-				info.teams[team.value] ??= [];
-			}
-			if(elem.value){
-				info.teams[elem.value].push(user);
-			}
-		}
-		for(const inp of document.getElementsByClassName('team-name-input')){
-			if(!(inp.value && inp.name) || inp.value==inp.name){
-				continue;
-			}
-			info.teams[inp.value] = info.teams[inp.name]
-			delete info.teams[inp.name];
-		}
-		const team_count = Math.max(2,document.getElementById("team_count").value);
-		const team_name_set = new Set(Object.keys(info.teams));
-		for(let i=1; Object.keys(info.teams).length<team_count; i++){
-			const teamname = `Team ${i}`;
-			if(!team_name_set.has(teamname)){
-				info.teams[teamname] = []
-			}
-		}
-		const team_order = global_team_order.length ? global_team_order : [...Object.keys(info.teams)]
-		while(Object.keys(info.teams).length>team_count){
-			delete info.teams[team_order[team_order.length-1]]
-		}
-	}
-	else{
-		info.teams = null;
-	}
-	info.max_players = fd["max_player_box"] ? fd["max_player_count"] : null;
-	info.public = fd["public"];
-	socket.send(JSON.stringify({
-		type:"update_rules",
-		info
-	}));
-});
-for(const btn of document.getElementsByClassName("start-button")){
-	btn.addEventListener("click", ()=>{
-		socket.send(JSON.stringify({type:"start_duel"}));
-	});
-}
 
 window.addEventListener('load', () => {
+	const path = window.location.pathname.split('/');
+	const duelid = path[path.length-1];
+	const url = "ws://"+window.location.host+"/duelroomsession/"+duelid;
+	const socket = new WebSocket(url);
+	socket.addEventListener("close", (evt)=>show_error(evt));
+	socket.addEventListener("message", msg => {
+		//console.log(msg.data)
+		const data = JSON.parse(msg.data);
+		const {type,info} = data;
+		if(type == "update_rules"){
+			update_rules(info);
+		}
+		else if(type == "update_player_list"){
+			update_player_list(info);
+		}
+		else if(type == "start_duel"){
+			window.location.replace("/duel/"+duelid);
+		}
+	})
+	const form = document.getElementById("rules-form");
+	form.addEventListener('change',(evt)=>{
+		const fd = Object.fromEntries((new FormData(form)).entries());
+		const info = {};
+		info.moving = (fd["freedom"]=="moving");
+		info.panning = (info.zooming = (fd["freedom"] != "nmpz"));
+		info.max_health = fd["max_health"]
+		for(const suffix of ['','_after_guess']){
+			info["time_limit"+suffix] = fd["time_limit"+suffix] 
+				? 1000 * ((parseInt(fd["time_limit_minutes"+suffix])||0)*60+(parseInt(fd["time_limit_seconds"+suffix])||0)) 
+				: null;
+		}
+		if(fd["teams"]){
+			info.teams = {};
+			for(const elem of document.getElementsByClassName("team-selector")){
+				const {user} = elem.dataset;
+				for(const team of elem.options){
+					if(!team.value){
+						continue;
+					}
+					info.teams[team.value] ??= [];
+				}
+				if(elem.value){
+					info.teams[elem.value].push(user);
+				}
+			}
+			for(const inp of document.getElementsByClassName('team-name-input')){
+				if(!(inp.value && inp.name) || inp.value==inp.name){
+					continue;
+				}
+				info.teams[inp.value] = info.teams[inp.name]
+				delete info.teams[inp.name];
+			}
+			const team_count = Math.max(2,document.getElementById("team_count").value);
+			const team_name_set = new Set(Object.keys(info.teams));
+			for(let i=1; Object.keys(info.teams).length<team_count; i++){
+				const teamname = `Team ${i}`;
+				if(!team_name_set.has(teamname)){
+					info.teams[teamname] = []
+				}
+			}
+			const team_order = global_team_order.length ? global_team_order : [...Object.keys(info.teams)]
+			while(Object.keys(info.teams).length>team_count){
+				delete info.teams[team_order[team_order.length-1]]
+			}
+		}
+		else{
+			info.teams = null;
+		}
+		info.max_players = fd["max_player_box"] ? fd["max_player_count"] : null;
+		info.public = fd["public"];
+		info.first_multiplier_round = fd["multipliers"] ? (Number(fd["multipliers_start"]) || 5) : null;
+		info.multiplier_increase = fd["multipliers"] ? (Number(fd["multipliers_step"]) || 0.5) : null;
+		socket.send(JSON.stringify({
+			type:"update_rules",
+			info
+		}));
+	});
+	for(const btn of document.getElementsByClassName("start-button")){
+		btn.addEventListener("click", ()=>{
+			socket.send(JSON.stringify({type:"start_duel"}));
+		});
+	}
+
 	const elem = document.getElementById("challengelink");
 	elem.textContent = window.location.href;
 	elem.href = elem.textContent;

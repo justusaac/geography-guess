@@ -190,7 +190,6 @@ class MapFile{
 	async dump(outfile="./locations.json"){
 		const outfp = await fs.promises.open(outfile, 'w');
 		const stream = outfp.createWriteStream({flush:true});
-		const count = await this.location_count();
 		stream.write("[")
 		let comma = false;
 		for await(const loc of this.read_all_locs()){
