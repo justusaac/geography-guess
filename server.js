@@ -39,13 +39,27 @@ app.set("view engine", "ejs");
 app.set("views", __dirname+"/views");
 
 
+
+const asyncWrapper = (fn) => {
+    return (req, res, next) => fn(req, res, next).catch((e)=>{console.error(e);next(e)});
+};
 async function getGame(id){
-    const result = await db_pool.query('select Games.*, Maps.MapName, Maps.MapID, Maps.ScoreModifier from Games left join Maps on Games.MapID=Maps.MapID where GameID=$1::uuid;', [id]);
-    return result.rows[0];
+    try{
+        const result = await db_pool.query('select Games.*, Maps.MapName, Maps.MapID, Maps.ScoreModifier from Games left join Maps on Games.MapID=Maps.MapID where GameID=$1::uuid;', [id]);
+        return result.rows[0];
+    }
+    catch(e){
+        return null;
+    }
 }
 async function getDuelUsers(id){
-    const result = await db_pool.query('select OwnerUsers.Username as OwnerName, array_agg(OpponentUsers.Username) as opponentnames from Duels left join Maps on Duels.MapID=Maps.MapID left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=ANY(Duels.OpponentUserIDs) where DuelID=$1::uuid group by OwnerName', [id]);
-    return result.rows[0];
+    try{
+        const result = await db_pool.query('select OwnerUsers.Username as OwnerName, array_agg(OpponentUsers.Username) as opponentnames from Duels left join Maps on Duels.MapID=Maps.MapID left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=ANY(Duels.OpponentUserIDs) where DuelID=$1::uuid group by OwnerName', [id]);
+        return result.rows[0];
+    }
+    catch(e){
+        return null;
+    }
 }
 async function backupGame(id, gameinfo){
     return db_pool.query('update Games set gameinfo=$1::jsonb where GameID=$2::uuid', [gameinfo, id]);
@@ -107,9 +121,14 @@ async function check_duplicate_challenge (req, res, next) {
     if(!challengeId || !userId){
         return res.redirect("/maplist");
     }
-    const response = await db_pool.query("select GameID from Games where UserID=$1::int and (ChallengeID=$2::uuid or GameID=$2::uuid)", [userId, challengeId]);
-    if(response.rows.length>0){
-        return res.redirect("/game/"+response.rows[0].gameid);
+    try{
+        const response = await db_pool.query("select GameID from Games where UserID=$1::int and (ChallengeID=$2::uuid or GameID=$2::uuid)", [userId, challengeId]);
+        if(response.rows.length>0){
+            return res.redirect("/game/"+response.rows[0].gameid);
+        }
+    }
+    catch(e){
+        return res.redirect("/maplist");
     }
     next();
 }
@@ -244,7 +263,7 @@ app.get("/game/:id", require_auth_game_id, (req, res) => {
     res.sendFile(__dirname+'/public/mapview.html');
 });
 
-app.ws("/gamesession/:id", async (ws, req) => {
+app.ws("/gamesession/:id", asyncWrapper(async (ws, req) => {
     if(!await check_req_game_id(req)){
         ws.close(3001, "Not authenticated");
         return
@@ -463,7 +482,7 @@ app.ws("/gamesession/:id", async (ws, req) => {
         }
         return get_game_results();
     })()));
-});
+}));
 
 
 
@@ -600,7 +619,7 @@ app.get("/duelroom/:id", require_auth, async (req,res)=>{
     const {mapid,mapname} = result.rows[0];
     return res.render("duelroom", with_username({mapname,mapid},req));
 });
-app.ws("/duelroomsession/:id", async (ws,req) => {
+app.ws("/duelroomsession/:id", asyncWrapper(async (ws,req) => {
     const duelId = req.params.id;
     const userId = req?.session?.passport?.user?.id;
     if(userId == null){
@@ -757,7 +776,7 @@ app.ws("/duelroomsession/:id", async (ws,req) => {
         info:{...row.duelinfo.rules, max_players: row.maxplayers, public:row.public}
     }));
 
-});
+}));
 
 app.get("/duel/:id", require_auth_duel_id, async (req, res) => {
     res.sendFile(__dirname+'/public/duelview.html');
@@ -766,7 +785,7 @@ const check_duel_finished = (duel)=>{
     // If less than 2 parties have health left then the games over
     return duel.health_before.length>0 && Object.values(duel.health_before[duel.health_before.length-1]).reduce((acc,curr)=>acc+(curr>0), 0)<2
 }
-app.ws("/duelsession/:id", async (ws, req) => {
+app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
     if(!await check_req_duel_id(req)){
         ws.close(3001, "Not authenticated");
         return
@@ -1076,7 +1095,7 @@ app.ws("/duelsession/:id", async (ws, req) => {
             }
         }
     });
-});
+}));
 
 app.get("/duelagain/:id", require_auth, async (req,res) => {
     const duelId = req.params.id;
