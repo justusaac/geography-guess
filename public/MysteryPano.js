@@ -265,10 +265,7 @@ class MysteryPano{
 			this.set_timer(round_data.start_time, this.game_info.rules.time_limit)
 		}
 		else{
-			for(const el of this.root.getElementsByClassName("round-timer")){
-				clearInterval(el.timer_interval);
-				el.classList.add("hidden");
-			}
+			this.clear_timer();
 		}
 
 	}
@@ -285,7 +282,6 @@ class MysteryPano{
 				const time_left = duration-elapsed;
 				const progress = elapsed/duration
 				if(time_left<0){
-					clearInterval(el.timer_interval);
 					//timer_reminder has no special meaning but any message will trigger the server to check the time limit
 					this.socket.send(JSON.stringify({type:"timer_reminder"}))
 					return;
@@ -300,6 +296,12 @@ class MysteryPano{
 			}
 			el.timer_interval = setInterval(update_timer_msg, 100);
 			update_timer_msg();
+		}
+	}
+	clear_timer(){
+		for(const el of this.root.getElementsByClassName("round-timer")){
+			clearInterval(el.timer_interval);
+			el.classList.add("hidden");
 		}
 	}
 	step_back(){
@@ -535,6 +537,8 @@ class MysteryPano{
 		}
 	}
 	show_round_results(round_info){
+
+		this.clear_timer();
 		this.pano?.setPano("NOPANO");
 		this.switch_view('round-results-container');
 		for(const container of this.root.getElementsByClassName("round-results-map-container")){
