@@ -314,7 +314,7 @@
 window.addEventListener('load', () => {
 	const path = window.location.pathname.split('/');
 	const duelid = path[path.length-1];
-	const url = "ws://"+window.location.host+"/duelroomsession/"+duelid;
+	const url = (window.location.protocol=="https:" ? "wss:" : "ws:")+"//"+window.location.host+"/duelroomsession/"+duelid;
 	const socket = new WebSocket(url);
 	socket.addEventListener("close", (evt)=>show_error(evt));
 	socket.addEventListener("message", msg => {
