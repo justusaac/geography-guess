@@ -25,6 +25,7 @@ app.use(session({
     store: new pg_session({
         pool: db_pool,
         createTableIfMissing:true,
+        tableName:'session'
     }),
     resave:false,
     saveUninitialized:false,
