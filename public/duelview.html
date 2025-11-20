@@ -299,7 +299,7 @@
 				}
 				//Show "you" first
 				const team_order = Object.keys(round_data.health_before).sort((a,b)=>(b==you_team)-(a==you_team));
-				const is_team_game = Math.max(...Object.values(this.game_info.rules.teams).map(x=>x.length))>1;
+				const is_team_game = !Object.entries(this.game_info.rules.teams).reduce((acc,curr)=>acc&&(curr[1].length==1)&&(curr[0]==curr[1][0]),true)
 				const guesses = []
 				const labels = [];
 				const usernames =[];

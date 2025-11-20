@@ -533,7 +533,7 @@ passport.use(new LocalStrategy(async (username, password, next) => {
     });
 }));
 passport.use('local-guest', new LocalStrategy(async (username, password, next) => {
-    username = "Guest-"+crypto.randomBytes(17).toString('base64url');
+    username = "Guest-"+crypto.randomBytes(9).toString('base64url');
     try{
         const result = await db_pool.query('insert into Users (Username, PasswordHash) values ($1::text, $2::text) returning UserID, Username;', [username, ""]);
         return next(null, {userid: result.rows[0].userid, username: result.rows[0].username});
@@ -556,7 +556,7 @@ app.post("/login", (req, res) => {
         failureFlash:true,
     })(req,res);
 });
-app.post("/login-guest", (req, res) => {
+app.post("/login-guest", (req, res,next ) => {
     req.flash = (type, msg) => {
         res.end(msg);
     };
@@ -564,7 +564,7 @@ app.post("/login-guest", (req, res) => {
     passport.authenticate('local-guest', {
         successRedirect: '/maplist',
         failureFlash:true,
-    })(req,res);
+    })(req,res,next);
 });
 app.get("/logout", (req, res, next) => {
     req.logout(function(err) {
@@ -630,6 +630,13 @@ app.ws("/duelroomsession/:id", asyncWrapper(async (ws,req) => {
     const username = req?.session?.passport?.user?.username;
 
     const client = new pg.Client();
+    ws.on('close',()=>{
+        client.end()
+    });
+    client.on('error', (e)=>{
+        ws.close(3001, "Database error");
+        console.error("Database error: ",e);
+    })
     await client.connect();
 
     const channelId = `duelroom_${duelId}`
@@ -659,9 +666,6 @@ app.ws("/duelroomsession/:id", asyncWrapper(async (ws,req) => {
         await notify_player_list();
         await client.query("commit");
     }
-    ws.on('close',async ()=>{
-        client.end()
-    });
     const is_owner = (row.mainuserid === userId);
     client.on("notification", (msg)=>{
         const payload = JSON.parse(msg.payload);
@@ -794,8 +798,12 @@ app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
     const duelId = req.params.id;
 
     const client = new pg.Client();
-    await client.connect()
     ws.on('close',()=>client.end());
+    client.on('error', (e)=>{
+        ws.close(3001, "Database error");
+        console.error("Database error: ",e)
+    })
+    await client.connect()
     await client.query('begin');
     const duelrow = {}
     try{
@@ -1182,7 +1190,9 @@ app.get("/dailychallenge", async (req,res)=>{
     }
 });
 
-
+process.on("uncaughtException",(e)=>{
+    console.error("uncaughtException !!! ",e);
+})
 const port = process.env.PORT ?? 80;
 const server = app.listen(port, function () {
     console.log(`Web server listening on port ${port}`)
