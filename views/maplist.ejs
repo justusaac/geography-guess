@@ -72,6 +72,8 @@
                     document.getElementById("form-results").innerHTML = "";
                     return sendForm();
                 }
+                const pageinput = document.getElementById("pageinput");
+                pageinput.value = parseInt(pageinput.value)+1;
                 const response = await fetch("/maps", {method:'POST', body:new URLSearchParams(fd)});
                 if(response.redirected){
                     window.location.href = response.url;
@@ -93,8 +95,6 @@
 
                 document.getElementById("world-map").style.display = (prevQuery=="") ? "revert-layer":"none";
 
-                const pageinput = document.getElementById("pageinput");
-                pageinput.value = parseInt(pageinput.value)+1;
                 return false;
             }
         })();

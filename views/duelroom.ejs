@@ -140,6 +140,14 @@
 			}
 		}
 		function update_player_list(info){
+			new Set(info?.users).difference(new Set(global_user_info?.users)).forEach((user)=>{
+				if(Notification?.permission === "granted" 
+				&& document.getElementById("notification-check").checked){
+					const img = "/favicon.ico"
+					const text = `${user} joined the lobby`
+					const notification = new Notification("Duel update", {body:text, icon:img});
+				}
+			})
 			global_user_info = info;
 			const {owner, users} = info;
 
@@ -236,7 +244,7 @@
 			
 			for(const btn of document.getElementsByClassName("start-button")){
 				btn.disabled = (owner != "<%= username %>" || users.length<2);
-				btn.style.visibility = (owner != "<%= username %>") ? "hidden" : "visible";
+				btn.style.display = (owner != "<%= username %>") ? "none" : "revert";
 
 			}
 			for(const tag of ["input","select"]){
@@ -309,6 +317,8 @@
 		</span>
 	</form>
 	<button disabled class="start-button">Start Duel</button>
+	<br>
+	<input type="checkbox" id="notification-check" class="notification-check" autocomplete="off"/><label for="notification-check">Join notifications</label>
 	<script>
 
 window.addEventListener('load', () => {
@@ -398,6 +408,21 @@ window.addEventListener('load', () => {
 	const elem = document.getElementById("challengelink");
 	elem.textContent = window.location.href;
 	elem.href = elem.textContent;
+
+	const noti = document.getElementById("notification-check")
+	noti.addEventListener("change", (e)=>{
+		if(e.target.checked){
+			Notification?.requestPermission().then(permission=>{
+				if(permission!=="granted"){
+					e.target.checked = false;
+				}
+			})
+		}
+	})
+	navigator?.permissions?.query({name:"notifications"})?.then(noti_perm=>{
+		noti_perm.addEventListener('change',()=>noti.checked = (noti_perm.state === 'granted'))
+	})
+	
 })
 	</script>
 </body>

@@ -494,6 +494,17 @@ app.post('/maps', require_auth, async (req,res) => {
     const result = await db_pool.query('select Maps.MapID, Maps.MapName, Maps.Description, Users.UserID, Users.Username from Maps left join Users on Maps.UserID=Users.UserID where lower(Maps.MapName) like lower($3) order by Maps.MapID limit $1::int offset $2::int', [number, page*number, '%'+query+'%'])
     res.end(JSON.stringify(result?.rows))
 });
+app.get('/duels', require_auth, (req,res)=>{
+    res.render('duelbrowser', with_username({},req));
+})
+app.post('/duels', require_auth, async (req,res) => {
+    const last_seen = req.body.last_seen || null;
+    const number = req.body.count ?? 20;
+    const result = await db_pool.query(`
+        with PrevRow as (select Duels.SortKey from (select 67) left join Duels on DuelID=$2::uuid)
+        select Duels.DuelID, Duels.DuelInfo->'rules' as rules, coalesce(array_length(Duels.OpponentUserIDs,1),0)+1 as PlayerCount, Duels.MaxPlayers, Maps.MapID, Maps.MapName, Users.UserID, Users.Username from Duels cross join PrevRow left join Users on Users.UserID=Duels.MainUserID left join Maps on Maps.MapID=Duels.MapID where (PrevRow.SortKey is null or Duels.SortKey<PrevRow.SortKey) and Duels.Public=true and Duels.Started=false and (Duels.MaxPlayers is null or (coalesce(array_length(Duels.OpponentUserIDs,1),0)+1)<Duels.MaxPlayers) order by Duels.SortKey desc limit $1::int`,[number, last_seen]);
+    res.end(JSON.stringify(result?.rows))
+});
 
 app.post("/register", (req, res) => {
     if(!req.body || !req.body.password || !req.body.username){
@@ -630,9 +641,6 @@ app.ws("/duelroomsession/:id", asyncWrapper(async (ws,req) => {
     const username = req?.session?.passport?.user?.username;
 
     const client = new pg.Client();
-    ws.on('close',()=>{
-        client.end()
-    });
     client.on('error', (e)=>{
         ws.close(3001, "Database error");
         console.error("Database error: ",e);
@@ -645,28 +653,37 @@ app.ws("/duelroomsession/:id", asyncWrapper(async (ws,req) => {
     }
     await client.query("begin;")
     await client.query("select 67 from Duels where DuelID=$1::uuid for update;",[duelId]);
-    const row = (await client.query("select Duels.DuelID, Duels.DuelInfo, Duels.MainUserID, Duels.MapID, Duels.Public, Duels.MaxPlayers, OwnerUsers.Username as ownername, array_agg(OpponentUsers.Username) as opponentnames,  Maps.MapName, Maps.ScoreModifier from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=any(Duels.OpponentUserIDs) left join Maps on Maps.MapID=Duels.MapID where DuelID=$1::uuid group by Duels.DuelID, Duels.DuelInfo, Duels.MapID, ownername, Maps.MapName, Maps.ScoreModifier, Duels.MainUserID, Duels.Public, Duels.MaxPlayers", [duelId])).rows[0];
+    const row = (await client.query("select Duels.DuelID, Duels.DuelInfo, Duels.MainUserID, Duels.MapID, Duels.Public, Duels.MaxPlayers, Duels.Started, OwnerUsers.Username as ownername, array_agg(OpponentUsers.Username) as opponentnames,  Maps.MapName, Maps.ScoreModifier from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=any(Duels.OpponentUserIDs) left join Maps on Maps.MapID=Duels.MapID where DuelID=$1::uuid group by Duels.DuelID, Duels.DuelInfo, Duels.MapID, ownername, Maps.MapName, Maps.ScoreModifier, Duels.MainUserID, Duels.Public, Duels.MaxPlayers, Duels.Started", [duelId])).rows[0];
     if(!row){
         ws.close(3001, "Duel not found");
         return;
     }
-    if(row.duelinfo?.rules?.ready){
+    if(row.started){
         ws.send(JSON.stringify({type:"start_duel"}));
         ws.close(3001, "Duel started already");
         return;
     }
-
+    const notify_rules = async () => client.query(`select pg_notify($1::text, jsonb_build_object('type','update_rules','info',jsonb_set(jsonb_set(DuelInfo->'rules', '{max_players}', coalesce(MaxPlayers::text::jsonb,'null'::jsonb), true), '{public}', Public::text::jsonb, true))::text) from Duels where DuelID=$2::uuid; `, [channelId, duelId]);
     const notify_player_list = async () => client.query(`select pg_notify($1::text, jsonb_build_object('type','update_player_list','info',jsonb_build_object('owner',OwnerUsers.Username,'users',jsonb_build_array(OwnerUsers.Username) || to_jsonb(array_remove(array_agg(OpponentUsers.Username),null))))::text) from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=ANY(Duels.OpponentUserIDs) where DuelID=$2::uuid group by OwnerUsers.Username`, [channelId, duelId]);
+    const is_owner = (row.mainuserid === userId);
     const leave_room = async () => {
         await client.query("begin;");
         await client.query("select 67 from Duels where DuelID=$1::uuid for update;", [duelId]);
         await client.query(`
             update Duels set OpponentUserIDs=array_remove(OpponentUserIDs, $1::integer) where DuelID=$2::uuid;
         `, [userId, duelId]);
+        if(is_owner){
+            await client.query("update Duels set Public=false where DuelID=$1::uuid", [duelId]);
+            await notify_rules();
+        }
         await notify_player_list();
         await client.query("commit");
     }
-    const is_owner = (row.mainuserid === userId);
+    
+    ws.on('close',async ()=>{
+        await leave_room();
+        client.end()
+    });
     client.on("notification", (msg)=>{
         const payload = JSON.parse(msg.payload);
         const {type,info} = payload;
@@ -734,8 +751,7 @@ app.ws("/duelroomsession/:id", asyncWrapper(async (ws,req) => {
                     update Duels set DuelInfo=jsonb_set(DuelInfo, '{rules}', $2::jsonb, true), Public=$3::boolean, MaxPlayers=$4::integer where DuelID=$1::uuid;
                 `, [duelId, filtered_info, public_room, max_players]);
 
-                await client.query(`select pg_notify($1::text, jsonb_build_object('type','update_rules','info',jsonb_set(jsonb_set(DuelInfo->'rules', '{max_players}', coalesce(MaxPlayers::text::jsonb,'null'::jsonb), true), '{public}', Public::text::jsonb, true))::text) from Duels where DuelID=$2::uuid;
-                `, [channelId, duelId]);
+                await notify_rules();
                 await client.query("commit;");
             }
         }
@@ -765,9 +781,8 @@ app.ws("/duelroomsession/:id", asyncWrapper(async (ws,req) => {
                     return client.query("commit");
                 }
                 rules.teams = new_teams;
-                rules.ready = true;
                 await client.query(`
-                    update Duels set DuelInfo=jsonb_set(DuelInfo, '{rules}', $2::jsonb, true) where DuelID=$1::uuid and (DuelInfo#>'{rules,ready}')::boolean is not true;
+                    update Duels set DuelInfo=jsonb_set(DuelInfo, '{rules}', $2::jsonb, true),Started=true where DuelID=$1::uuid and Started is not true;
                 `, [duelId, rules]);
                 await client.query(`
                     select pg_notify($1::text, jsonb_build_object('type','start_duel')::text);
@@ -809,7 +824,7 @@ app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
     try{
 
         await client.query("select 67 from Duels where DuelID=$1::uuid for update;",[duelId]);
-        const row = (await client.query('select Duels.DuelInfo, Duels.MapID, Maps.MapName, Maps.MapID, OwnerUsers.Username as OwnerName, array_agg(OpponentUsers.Username) as OpponentNames from Duels left join Maps on Duels.MapID=Maps.MapID left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=ANY(Duels.OpponentUserIDs) where DuelID=$1::uuid group by Duels.DuelInfo, Duels.MapID, Maps.MapName, Maps.MapID, OwnerName;', [duelId])).rows[0];
+        const row = (await client.query('select Duels.DuelInfo, Duels.Started, Maps.MapName, Maps.MapID, OwnerUsers.Username as OwnerName, array_agg(OpponentUsers.Username) as OpponentNames from Duels left join Maps on Duels.MapID=Maps.MapID left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=ANY(Duels.OpponentUserIDs) where DuelID=$1::uuid group by Duels.DuelInfo,  Maps.MapName, Maps.MapID, OwnerName, Duels.Started;', [duelId])).rows[0];
         Object.assign(duelrow, row);
     }
     catch{
@@ -821,11 +836,11 @@ app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
         return
     }
         
-    if(!duel.rules?.ready){
+    if(!duelrow.started){
         ws.close(4004, "Not ready");
         return;
     }
-
+    console.log(duelrow, duel);
 
     const score_modifier = duelrow.duelinfo.rules.scoremodifier;
     const process_guess = (guess,actual) => {
@@ -1120,7 +1135,6 @@ app.get("/duelagain/:id", require_auth, async (req,res) => {
         return res.redirect("/duel/"+duelId);
     }
     const rules = result.duelinfo.rules;
-    rules.ready = false;
     //Remove auto assigned teams
     for(const team in rules.teams){
         if(rules.teams[team].length===1 && rules.teams[team][0]===team){

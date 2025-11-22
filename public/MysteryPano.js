@@ -19,7 +19,7 @@ class MysteryPano{
 		);
 		this.map.decor = [];
 		this.adjust_expanded_map(true);
-		this.socket.addEventListener("close", ()=>this.show_error("Websocket connection lost"));
+		this.socket.addEventListener("close", (e)=>this.show_error(`Websocket connection lost: "${e.reason}"`));
 		this.socket.addEventListener("message", msg => {
 			//console.log(msg.data)
 			const data = JSON.parse(msg.data);
@@ -622,8 +622,8 @@ class MysteryPano{
 
 			base.appendChild(document.createTextNode(`${
 				this.game_info?.rules.moving ? "Moving"
-				: this.game_info?.rules.zooming ? "No moving"
-				: "No move/pan/zoom"
+				: !(this.game_info?.rules.zooming || this.game_info?.rules.panning) ? "No move/pan/zoom"
+				: "No Moving"
 			} game`));
 			if(this.game_info?.rules.time_limit){
 				base.appendChild(document.createTextNode(`, ${

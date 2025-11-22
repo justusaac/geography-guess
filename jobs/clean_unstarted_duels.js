@@ -3,6 +3,6 @@ const pg = require('pg');
 
 (async ()=>{
 	const pool = new pg.Pool();
-	const res = await pool.query("delete from Duels where extract(day from current_timestamp-createtime)>45 and coalesce(DuelInfo->'rules'->'ready','false'::jsonb)='true'::jsonb;");
+	const res = await pool.query("delete from Duels where extract(day from current_timestamp-createtime)>45 and Started=false;");
 	console.log(res);
 })()

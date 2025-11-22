@@ -1,0 +1,144 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Duel browser</title>
+	<style>
+		body{
+			font-family:sans-serif;
+		}
+		.duel-card{
+			border: 1px solid black;
+			border-radius:3px;
+			padding:3px;
+			margin:3px;
+			color:black;
+			text-decoration:none;
+			box-sizing:border-box;
+			background-color:#c9f2ff;
+			display:inline-block;
+			line-height:2.5ex;
+			min-height:12.5ex;
+			overflow-wrap:anywhere;
+			overflow:hidden;
+			ul{
+				margin:0px;
+			}
+		}
+		#form-results{
+			display:flex;
+			flex-direction:column;
+			width:35em;
+		}
+		button, input[type="submit"]{
+			padding:3px;
+			margin:3px;
+		}
+		main{
+			justify-content:center;
+			align-items:center;
+			display:flex;
+			flex-direction:column;
+		}
+		.tip{
+			background-color:#9afb7f;
+			border: 1px solid black;
+			border-radius:3px;
+			margin-top:10px;
+			margin-bottom:3px;
+			padding:3px;
+			display:inline-block;
+			flex-grow:1;
+			width:100%;
+			text-align:center;
+		}
+		h3{
+			margin-bottom:0px;
+		}
+	</style>
+	<script>
+		function formatDuel(duel){
+			const a = document.createElement('a');
+			a.href = "/duelroom/"+duel.duelid;
+			a.classList.add('duel-card');
+			a.appendChild(document.createTextNode("Map: "))
+			const mapname = document.createElement("b");
+			mapname.textContent = duel.mapname;
+			a.appendChild(mapname);
+			a.appendChild(document.createElement("br"));
+			a.appendChild(document.createTextNode("With: "));
+			const ownername = document.createElement("b");
+			ownername.textContent = duel.username;
+			a.appendChild(ownername);
+			a.appendChild(document.createTextNode(` (${duel.playercount}${duel.maxplayers ? `/${duel.maxplayers}` : ''} player${duel.maxplayers || duel.playercount>1 ? 's' : ''})`));
+			a.appendChild(document.createElement('hr'));
+			const ul = document.createElement('ul');
+			const movement_li = document.createElement('li');
+			movement_li.appendChild(document.createTextNode(`${
+				duel.rules.moving ? "Moving"
+				: !(duel.rules.zooming || duel.rules.panning) ? "No move/pan/zoom"
+				: "No moving"
+			}`));
+			ul.appendChild(movement_li);
+			a.appendChild(ul);
+			return a;
+		}
+		async function sendForm(event){
+			event?.preventDefault();
+
+			const fd = new FormData(document.getElementById('search-form'));
+			document.getElementById('load-more').style.visibility="collapse"
+			const response = await fetch("/duels", {method:'POST', body:new URLSearchParams(fd)});
+			if(response.redirected){
+				window.location.href = response.url;
+				return;
+			}
+			const duels = await response.json();
+			if(duels.length>0){
+            	document.getElementById("lastseeninput").value = duels[duels.length-1].duelid;
+            }
+			const layout = [];
+			for(const duel of duels){
+				layout.push(formatDuel(duel))
+			}
+			const elem = document.getElementById('form-results')
+			if(layout.length < fd.get("count")){
+				if(elem.children.length==0 && layout.length<0){
+					layout.push(`No duels found`)
+				}
+			}
+			else{	
+				document.getElementById('load-more').style.visibility="revert-layer"
+			}
+			elem.append(...layout);
+            return false;
+		}
+		function refresh(){
+			document.getElementById("lastseeninput").value = ""
+			document.getElementById('form-results').innerHTML = ""
+			sendForm()
+		}
+	</script>
+</head>
+<body onload="sendForm()">
+	<%- include('navheader'); %>
+	<main>
+		<span>
+			<span class="tip">
+				To create a new duel <a href="/maplist">choose a map</a> and click the duel button.
+			</span>
+			<br>
+			<h3>Public duels</h3>
+			<hr>
+			<button onclick="refresh()">Refresh</button>
+			<div id="form-results"></div>
+			<form id="search-form" onsubmit="sendForm(event)">
+				<input type="hidden" name="last_seen" value="" autocomplete="off" id="lastseeninput"/>
+				<input type="hidden" name="count" value="2"/>
+				<input type="submit" value="Load more" id="load-more"/>
+			</form>
+		</span>
+	</main>
+</body>
+</html>

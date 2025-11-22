@@ -22,7 +22,8 @@ create table Games (
 	UserID int references Users(UserID) on delete cascade,
 	MapID int references Maps(MapID) on delete cascade,
 	ChallengeID uuid,
-	CreateTime timestamp not null default current_timestamp
+	CreateTime timestamp not null default current_timestamp,
+	SortKey int generated always as identity unique
 );
 create table Duels (
 	DuelID uuid primary key default gen_random_uuid(),
@@ -31,8 +32,10 @@ create table Duels (
 	OpponentUserIDs integer[],
 	MaxPlayers int default 2,
 	Public boolean not null default false,
+	Started boolean not null default false,
 	MapID int references Maps(MapID) on delete cascade,
-	CreateTime timestamp not null default current_timestamp
+	CreateTime timestamp not null default current_timestamp,
+	SortKey int generated always as identity unique
 );
 create table HighScores (
 	UserID int references Users(UserID) on delete cascade,
