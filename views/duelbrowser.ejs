@@ -29,7 +29,6 @@
 		#form-results{
 			display:flex;
 			flex-direction:column;
-			width:35em;
 		}
 		button, input[type="submit"]{
 			padding:3px;
@@ -41,6 +40,9 @@
 			display:flex;
 			flex-direction:column;
 		}
+		#main-span{
+			width:min(100%,35em);
+		}
 		.tip{
 			background-color:#9afb7f;
 			border: 1px solid black;
@@ -48,9 +50,7 @@
 			margin-top:10px;
 			margin-bottom:3px;
 			padding:3px;
-			display:inline-block;
 			flex-grow:1;
-			width:100%;
 			text-align:center;
 		}
 		h3{
@@ -58,6 +58,12 @@
 		}
 	</style>
 	<script>
+		function formatTime(ms){
+			if(!ms || !isFinite(ms)){
+				return "Unlimited";
+			}
+			return `${Math.floor(ms/1000/60).toString().padStart(1,"0")}:${Math.floor((ms/1000)%60).toString().padStart(2,"0")}`;
+		}
 		function formatDuel(duel){
 			const a = document.createElement('a');
 			a.href = "/duelroom/"+duel.duelid;
@@ -81,6 +87,11 @@
 				: "No moving"
 			}`));
 			ul.appendChild(movement_li);
+			const time_li = document.createElement('li');
+			time_li.appendChild(document.createTextNode(`
+				${formatTime(duel.rules.time_limit)}/${formatTime(Math.min(duel.rules.time_limit||Infinity,duel.rules.time_limit_after_guess||Infinity))} 
+				time limit`))
+			ul.appendChild(time_li);
 			a.appendChild(ul);
 			return a;
 		}
@@ -124,18 +135,17 @@
 <body onload="sendForm()">
 	<%- include('navheader'); %>
 	<main>
-		<span>
-			<span class="tip">
+		<span id="main-span">
+			<div class="tip">
 				To create a new duel <a href="/maplist">choose a map</a> and click the duel button.
-			</span>
-			<br>
+			</div>
 			<h3>Public duels</h3>
 			<hr>
 			<button onclick="refresh()">Refresh</button>
 			<div id="form-results"></div>
 			<form id="search-form" onsubmit="sendForm(event)">
 				<input type="hidden" name="last_seen" value="" autocomplete="off" id="lastseeninput"/>
-				<input type="hidden" name="count" value="2"/>
+				<input type="hidden" name="count" value="20"/>
 				<input type="submit" value="Load more" id="load-more"/>
 			</form>
 		</span>
