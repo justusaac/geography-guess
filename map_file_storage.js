@@ -51,6 +51,7 @@ class MapFile{
     	}
     	instance.largeobject = await (new LargeObjectManager(instance.client)).openAsync(oid, write ? LargeObjectManager.READWRITE : LargeObjectManager.READ);
     	instance.oid = oid;
+    	instance.mapid = mapid;
 		return instance;
 	}
 	async update_metadata(){
@@ -129,13 +130,34 @@ class MapFile{
 	}
 	async write_locs(locs){
 		await this.largeobject.seekAsync(0, LargeObject.SEEK_END);
-		return new Promise((resolve, reject)=>{
+		return new Promise(async (resolve, reject)=>{
 			const writestream = this.largeobject.getWritableStream(BUFFER_SIZE * 500);
-			for(const loc of locs){
+			for await (const loc of locs){
 				writestream.write(MapFile.object_to_buffer(loc));
 			}
 			writestream.end(resolve);
 		});
+	}
+
+	async filter(predicate){
+		await this.largeobject.seekAsync(0, LargeObject.SEEK_SET);
+		let i=0;
+		let kept=0;
+		await new Promise(async (resolve,reject)=>{
+			const writestream = this.largeobject.getWritableStream(BUFFER_SIZE * 500);
+			for await (const loc of this.read_all_locs()){
+				if(predicate(loc,i)){
+					const pos = await this.largeobject.tellAsync();
+					this.largeobject.seekAsync(kept*BUFFER_SIZE, LargeObject.SEEK_SET);
+					writestream.write(MapFile.object_to_buffer(loc));
+					this.largeobject.seekAsync(pos, LargeObject.SEEK_SET);
+					kept++;
+				}
+				i++;
+			}
+			writestream.end(resolve);
+		});
+		return this.largeobject.truncateAsync(kept*BUFFER_SIZE);
 	}
 
 	async score_modifier(){
@@ -203,6 +225,70 @@ class MapFile{
 		}
 		stream.write("]")
 		outfp.close()
+	}
+	async import(infile){
+		await this.largeobject.seekAsync(0, LargeObject.SEEK_END);
+		const writestream = this.largeobject.getWritableStream(BUFFER_SIZE * 500);
+		const readstream = fs.createReadStream(infile, {encoding:'utf8'});
+		let charbuf = '';
+		let object_nest_depth = 0;
+		let string_starter = null;
+		let escape = false;
+		let inside_array = false;
+		readstream.on('data',(chunk)=>{
+			let objstartidx = 0;
+			for(let i=0; i<chunk.length; i++){
+				if(escape){
+					escape = false;
+					continue;
+				}
+				const char = chunk[i];
+				if(string_starter==null){
+					if(char=='{' && inside_array){
+						if(object_nest_depth++==0){
+							objstartidx=i;
+						}
+					}
+					else if(char=='}' && inside_array){
+						if(--object_nest_depth==0){
+							const obj_str = charbuf + chunk.slice(objstartidx,i+1);
+							charbuf = ''
+							const loc = JSON.parse(obj_str);
+							writestream.write(MapFile.object_to_buffer(loc));
+						}
+					}
+					else if(char=='"' || char=="'"){
+						string_starter = char;
+					}
+					else if(char=='[' && !inside_array){
+						object_nest_depth=0;
+						inside_array=true;
+					}
+					else if(char==']' && inside_array && object_nest_depth==0){
+						inside_array = false
+					}
+				}
+				else{
+					if(char=='\\'){
+						escape = true;
+					}
+					else if(char==string_starter){
+						string_starter=null;
+					}
+				}
+			}
+			if(object_nest_depth>0){
+				charbuf += chunk.slice(objstartidx)
+			}
+		})
+		return new Promise((resolve)=>{
+			readstream.on('end',async ()=>{
+				await new Promise(r=>{
+					writestream.end(r);
+				})
+				resolve()
+			})
+		})
 	}
 }
 

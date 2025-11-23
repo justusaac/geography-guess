@@ -56,22 +56,30 @@ const map = await MapFile.open(mapid, true);
 
 const initial_loc_count = await map.location_count();
 
-const shutdown = async () => {
-	console.log("\nShutting down")
-    await map.update_metadata();
-    const loc_count = await map.location_count();
-    await map.close();
-    console.log(`\ndone with ${mapname}, now has ${loc_count} locations (added ${loc_count-initial_loc_count})`);
 
-	process.exit()
-}
+const shutdown = (()=>{
+	const shutdown_called = new Uint8Array(new SharedArrayBuffer(1));
+	shutdown_called[0]=0;
+	return async () => {
+		if(Atomics.compareExchange(shutdown_called,0,0,67)!=0){
+			return;
+		}
+		console.log("\nShutting down")
+	    await map.update_metadata();
+	    const loc_count = await map.location_count();
+	    await map.close();
+	    console.log(`\ndone with ${mapname}, now has ${loc_count} locations (added ${loc_count-initial_loc_count})`);
+
+		process.exit()
+	}
+})()
 process.on("SIGINT",shutdown)
+if(desired_locations==0){
+	await shutdown();
+}
 var total_found_locations = 0;
 app.ws("/locationstream", (ws,req) => {
-    ws.on('message', (msg) => {
-    	if(msg==="SHUTDOWN"){
-    		return shutdown()
-    	}
+    ws.on('message', async (msg) => {
     	if(msg==="RESTART"){
     		console.log("\nrestarting browser");
     		return startBrowserSearch(desired_locations-total_found_locations)
@@ -80,12 +88,15 @@ app.ws("/locationstream", (ws,req) => {
 			if(!map.largeobject){
 				return;
 			}
-			map.write_loc(JSON.parse(msg));		
+			await map.write_loc(JSON.parse(msg));		
 			total_found_locations++
 			process.stdout.clearLine();
 			process.stdout.cursorTo(0);
 			process.stdout.write(`${total_found_locations}/${desired_locations} `)
 			process.stdout.write(msg);
+			if(total_found_locations==desired_locations){
+				return shutdown();
+			}
 		}
 		catch{
 			console.log("\nError: ")
@@ -162,7 +173,6 @@ const startBrowserSearch = (() => {
 			await barrier;
 			clearTimeout(timeoutid);
 		}
-		socket.send("SHUTDOWN")
 		window.close();
 	}
 	const script = document.createElement('script');
