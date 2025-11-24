@@ -668,15 +668,17 @@ app.ws("/duelroomsession/:id", asyncWrapper(async (ws,req) => {
     const is_owner = (row.mainuserid === userId);
     const leave_room = async () => {
         await client.query("begin;");
-        await client.query("select 67 from Duels where DuelID=$1::uuid for update;", [duelId]);
-        await client.query(`
-            update Duels set OpponentUserIDs=array_remove(OpponentUserIDs, $1::integer) where DuelID=$2::uuid;
-        `, [userId, duelId]);
-        if(is_owner){
-            await client.query("update Duels set Public=false where DuelID=$1::uuid", [duelId]);
-            await notify_rules();
+        const result = await client.query("select 67 from Duels where DuelID=$1::uuid and not Started for update;", [duelId]);
+        if(result.rows.length>0){
+            await client.query(`
+                update Duels set OpponentUserIDs=array_remove(OpponentUserIDs, $1::integer) where DuelID=$2::uuid;
+            `, [userId, duelId]);
+            if(is_owner){
+                await client.query("update Duels set Public=false where DuelID=$1::uuid", [duelId]);
+                await notify_rules();
+            }
+            await notify_player_list();
         }
-        await notify_player_list();
         await client.query("commit");
     }
     
@@ -840,7 +842,6 @@ app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
         ws.close(4004, "Not ready");
         return;
     }
-    console.log(duelrow, duel);
 
     const score_modifier = duelrow.duelinfo.rules.scoremodifier;
     const process_guess = (guess,actual) => {
