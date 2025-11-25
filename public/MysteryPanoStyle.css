@@ -256,6 +256,7 @@ html,body{
 	font-size:12px;
 	padding: 0.25em 0px;
 	border:1px solid black;
+	margin-top:1px;
 	padding:2px;
 	border-radius:2px;
 	background-color:rgba(200,200,200,0.6);

@@ -355,7 +355,7 @@
 							if(i==0){
 								const delta_td = document.createElement("td");
 								delta_td.rowSpan = sorted_users.length;
-								delta_td.innerHTML = `<span style="color:${damage>0 ? "red" : "green"}">${-damage}</span>`
+								delta_td.innerHTML = `<span style="color:${(health_before<=0) ? "rgba(0,0,0,0)" : damage>0 ? "red" : "green"}">${-damage}</span>`
 								tr.appendChild(delta_td);
 								const health_td = document.createElement('td');
 								health_td.rowSpan = sorted_users.length;
@@ -509,7 +509,7 @@
 							}
 							td.innerHTML = `
 								<span>
-									<span style="color:${delta<0 ? "red" : "green"}">${delta}</span>
+									<span style="color:${(health_before<=0) ? "rgba(0,0,0,0)" : delta<0 ? "red" : "green"}">${delta}</span>
 									<br>
 									<span style="font-size:1.2em">${health_after}</span>
 								</span>								
