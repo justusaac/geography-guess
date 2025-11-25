@@ -19,7 +19,7 @@ class MysteryPano{
 		);
 		this.map.decor = [];
 		this.adjust_expanded_map(true);
-		this.socket.addEventListener("close", (e)=>this.show_error(`Websocket connection lost: "${e.reason}"`));
+		this.socket.addEventListener("close", (e)=>this.show_error(`Websocket connection lost${e.reason?': "':''}${e.reason}${e.reason?'"':''}`));
 		this.socket.addEventListener("message", msg => {
 			//console.log(msg.data)
 			const data = JSON.parse(msg.data);
