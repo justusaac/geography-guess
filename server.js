@@ -651,8 +651,8 @@ app.ws("/duelroomsession/:id", asyncWrapper(async (ws,req) => {
     if(!/^[A-Za-z0-9-_]+$/.test(channelId)){
         return;
     }
-    await client.query("begin;")
-    await client.query("select 67 from Duels where DuelID=$1::uuid for update;",[duelId]);
+    client.query("begin;")
+    client.query("select 67 from Duels where DuelID=$1::uuid for update;",[duelId]);
     const row = (await client.query("select Duels.DuelID, Duels.DuelInfo, Duels.MainUserID, Duels.MapID, Duels.Public, Duels.MaxPlayers, Duels.Started, OwnerUsers.Username as ownername, array_agg(OpponentUsers.Username) as opponentnames,  Maps.MapName, Maps.ScoreModifier from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=any(Duels.OpponentUserIDs) left join Maps on Maps.MapID=Duels.MapID where DuelID=$1::uuid group by Duels.DuelID, Duels.DuelInfo, Duels.MapID, ownername, Maps.MapName, Maps.ScoreModifier, Duels.MainUserID, Duels.Public, Duels.MaxPlayers, Duels.Started", [duelId])).rows[0];
     if(!row){
         ws.close(3001, "Duel not found");
@@ -667,19 +667,19 @@ app.ws("/duelroomsession/:id", asyncWrapper(async (ws,req) => {
     const notify_player_list = async () => client.query(`select pg_notify($1::text, jsonb_build_object('type','update_player_list','info',jsonb_build_object('owner',OwnerUsers.Username,'users',jsonb_build_array(OwnerUsers.Username) || to_jsonb(array_remove(array_agg(OpponentUsers.Username),null))))::text) from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=ANY(Duels.OpponentUserIDs) where DuelID=$2::uuid group by OwnerUsers.Username`, [channelId, duelId]);
     const is_owner = (row.mainuserid === userId);
     const leave_room = async () => {
-        await client.query("begin;");
+        client.query("begin;");
         const result = await client.query("select 67 from Duels where DuelID=$1::uuid and not Started for update;", [duelId]);
         if(result.rows.length>0){
-            await client.query(`
+            client.query(`
                 update Duels set OpponentUserIDs=array_remove(OpponentUserIDs, $1::integer) where DuelID=$2::uuid;
             `, [userId, duelId]);
             if(is_owner){
-                await client.query("update Duels set Public=false where DuelID=$1::uuid", [duelId]);
-                await notify_rules();
+                client.query("update Duels set Public=false where DuelID=$1::uuid", [duelId]);
+                notify_rules();
             }
-            await notify_player_list();
+            notify_player_list();
         }
-        await client.query("commit");
+        return client.query("commit");
     }
     
     ws.on('close',async ()=>{
@@ -705,11 +705,11 @@ app.ws("/duelroomsession/:id", asyncWrapper(async (ws,req) => {
         }
     });
     // I dont think this can be done with prepared statements
-    await client.query(`listen "${channelId}"`);
+    client.query(`listen "${channelId}"`);
 
     //Reject if full, join if not in, send message if already in
     if(is_owner || row.opponentnames.includes(username)){
-        await notify_player_list();
+        notify_player_list();
     }
     else{
         const results = await client.query(`
@@ -719,9 +719,9 @@ app.ws("/duelroomsession/:id", asyncWrapper(async (ws,req) => {
             ws.close(3001, "Duel was already full");
             return;
         }
-        await notify_player_list();
+        notify_player_list();
     }
-    await client.query("commit;");
+    client.query("commit;");
     ws.on("message", async (msg)=>{
         let data;
         try{
@@ -747,21 +747,21 @@ app.ws("/duelroomsession/:id", asyncWrapper(async (ws,req) => {
                     multiplier_increase:Number(info.multiplier_increase),
                     teams:info.teams, //Will be validated/reformed when it actually starts
                 };
-                await client.query("begin;");
-                await client.query("select 67 from Duels where DuelID=$1::uuid for update;", [duelId]);
-                await client.query(`
+                client.query("begin;");
+                client.query("select 67 from Duels where DuelID=$1::uuid for update;", [duelId]);
+                client.query(`
                     update Duels set DuelInfo=jsonb_set(DuelInfo, '{rules}', $2::jsonb, true), Public=$3::boolean, MaxPlayers=$4::integer where DuelID=$1::uuid;
                 `, [duelId, filtered_info, public_room, max_players]);
 
-                await notify_rules();
-                await client.query("commit;");
+                notify_rules();
+                client.query("commit;");
             }
         }
         if(type == "start_duel"){
             if(is_owner){
-                await client.query("begin");
+                client.query("begin");
                 //Create teams from rules
-                await client.query("select 67 from Duels where DuelID=$1::uuid for update;",[duelId]);
+                client.query("select 67 from Duels where DuelID=$1::uuid for update;",[duelId]);
                 const result = await client.query("select Duels.DuelInfo, OwnerUsers.Username as ownername, array_agg(OpponentUsers.Username) as opponentnames from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=any(Duels.OpponentUserIDs) where DuelID=$1::uuid group by Duels.DuelInfo, ownername;", [duelId]);
                 const rules = result.rows[0].duelinfo.rules;
                 const unaccounted_players = new Set([result.rows[0].ownername, ...result.rows[0].opponentnames]);
@@ -783,13 +783,13 @@ app.ws("/duelroomsession/:id", asyncWrapper(async (ws,req) => {
                     return client.query("commit");
                 }
                 rules.teams = new_teams;
-                await client.query(`
+                client.query(`
                     update Duels set DuelInfo=jsonb_set(DuelInfo, '{rules}', $2::jsonb, true),Started=true where DuelID=$1::uuid and Started is not true;
                 `, [duelId, rules]);
-                await client.query(`
+                client.query(`
                     select pg_notify($1::text, jsonb_build_object('type','start_duel')::text);
                 `, [channelId]);
-                await client.query("commit");
+                client.query("commit");
             }
         }
     });
@@ -821,11 +821,11 @@ app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
         console.error("Database error: ",e)
     })
     await client.connect()
-    await client.query('begin');
+    client.query('begin');
     const duelrow = {}
     try{
 
-        await client.query("select 67 from Duels where DuelID=$1::uuid for update;",[duelId]);
+        client.query("select 67 from Duels where DuelID=$1::uuid for update;",[duelId]);
         const row = (await client.query('select Duels.DuelInfo, Duels.Started, Maps.MapName, Maps.MapID, OwnerUsers.Username as OwnerName, array_agg(OpponentUsers.Username) as OpponentNames from Duels left join Maps on Duels.MapID=Maps.MapID left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=ANY(Duels.OpponentUserIDs) where DuelID=$1::uuid group by Duels.DuelInfo,  Maps.MapName, Maps.MapID, OwnerName, Duels.Started;', [duelId])).rows[0];
         Object.assign(duelrow, row);
     }
@@ -917,18 +917,18 @@ app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
 
     const finish_round = async (round_idx) =>{
         const now = Date.now();
-        await client.query("begin;");
+        client.query("begin;");
         const duelinfo = (await client.query("select Duels.DuelInfo from Duels where DuelID=$1::uuid for update;", [duelId])).rows[0].duelinfo;
         duelinfo.finishTimes[round_idx] = Date.now();
         const res = await client.query(`update Duels set DuelInfo=$3::jsonb where DuelID=$1::uuid and jsonb_array_length(DuelInfo->'finishTimes')=$2::int`, [duelId, round_idx, duelinfo]);
         if(res.rowCount>0){
 
-            await client.query(`select pg_notify($1::text, jsonb_build_object('type','finish_round','info',jsonb_build_object('index',$2::integer,'finish_time',(DuelInfo->'finishTimes'->$2::integer)))::text) from Duels where DuelID=$3::uuid`, [channelId, round_idx, duelId]);
+            client.query(`select pg_notify($1::text, jsonb_build_object('type','finish_round','info',jsonb_build_object('index',$2::integer,'finish_time',(DuelInfo->'finishTimes'->$2::integer)))::text) from Duels where DuelID=$3::uuid`, [channelId, round_idx, duelId]);
         }
         else{
             send_current_state();
         }
-        await client.query("commit;");
+        return client.query("commit;");
     }  
 
     client.on("notification", (msg)=>{
@@ -967,11 +967,11 @@ app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
     if(!/^[A-Za-z0-9-_]+$/.test(channelId)){
         return;
     }
-    await client.query(`listen "${channelId}"`);
+    client.query(`listen "${channelId}"`);
 
     const add_new_round = async (round_idx) =>{
         //Check if the game has already ended
-        await client.query("begin;");
+        client.query("begin;");
         const duelinfo = (await client.query("select Duels.DuelInfo from Duels where DuelID=$1::uuid for update;", [duelId])).rows[0].duelinfo;
         if(round_idx==0){
             duelinfo.health_before[round_idx] = {};
@@ -1010,16 +1010,16 @@ app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
 
         if(res.rowCount>0){
 
-            await client.query(`select pg_notify($1::text, jsonb_build_object('type','new_round','info',jsonb_build_object('index',$2::integer,'location',(DuelInfo->'locations'->$2::integer),'start_time',(DuelInfo->'startTimes'->$2::integer),'health_before',(DuelInfo->'health_before'->$2::integer)))::text) from Duels where DuelID=$3::uuid`, [channelId, round_idx, duelId]);
+            client.query(`select pg_notify($1::text, jsonb_build_object('type','new_round','info',jsonb_build_object('index',$2::integer,'location',(DuelInfo->'locations'->$2::integer),'start_time',(DuelInfo->'startTimes'->$2::integer),'health_before',(DuelInfo->'health_before'->$2::integer)))::text) from Duels where DuelID=$3::uuid`, [channelId, round_idx, duelId]);
         }
         else{
             send_current_state();
         }
-        await client.query("commit;");
+        return client.query("commit;");
     }  
     const check_time_limit = async ()=>{
         if(check_duel_finished(duel)){
-            return;
+            return false;
         }
         const now = Date.now();
         const {time_limit, time_limit_after_guess} = duel.rules;
@@ -1072,19 +1072,19 @@ app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
         const result = process_guess(location, duel.locations[round]);
         result.final = final && Date.now();
         const username = req.session.passport.user.username;
-        await client.query('begin');
-        await client.query('select 67 from Duels where DuelID=$1::uuid for update;',[duelId]);
+        client.query('begin');
+        client.query('select 67 from Duels where DuelID=$1::uuid for update;',[duelId]);
         const res = await client.query(`
             update Duels set DuelInfo=jsonb_set(DuelInfo, ARRAY['guesses', $3::text, $2::text], $4::jsonb, true) where DuelID=$1::uuid and 
             jsonb_typeof(DuelInfo->'guesses'->$3::integer->$2::text->'final') is distinct from 'number';
         `,[duelId, username, round, result]);
         if(res.rowCount>0){
-            await client.query(`select pg_notify($2::text, jsonb_build_object('type','update_guess','info',jsonb_build_object('round',$3::integer,'user',$4::text,'guess',(DuelInfo->'guesses'->$3::integer->$4::text)))::text) from Duels where DuelID=$1::uuid;`,[duelId, channelId, round, username]);
+            client.query(`select pg_notify($2::text, jsonb_build_object('type','update_guess','info',jsonb_build_object('round',$3::integer,'user',$4::text,'guess',(DuelInfo->'guesses'->$3::integer->$4::text)))::text) from Duels where DuelID=$1::uuid;`,[duelId, channelId, round, username]);
         }
         else{
             send_current_state();
         }
-        await client.query("commit;");
+        return client.query("commit;");
     };
 
     ws.send(JSON.stringify({
@@ -1096,7 +1096,7 @@ app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
         mapid:duelrow.mapid
     }));
     (await check_time_limit()) || (send_current_state());
-    await client.query("commit;");
+    client.query("commit;");
     const your_team = Object.keys(duel.rules.teams).filter(t=>duel.rules.teams[t].includes(req.session.passport.user.username))[0];
     ws.on("message", async (msg)=>{
         if(await check_time_limit()){
@@ -1113,10 +1113,10 @@ app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
         //Players/teams that have been eliminated cant make guesses
         if(duel.health_before[duel.health_before.length-1][your_team]>0){
             if(data.type == "update_guess"){
-                await update_guess(data.location, data.round, false);
+                update_guess(data.location, data.round, false);
             }
             else if(data.type == "confirm_guess"){
-                await update_guess(data.location, data.round, true);
+                update_guess(data.location, data.round, true);
             }
         }
     });
