@@ -3,23 +3,46 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/global_styles.css"/>
 	<title><%= mapname %></title>
 	<style>
-		body{
-			font-family:sans-serif;
-		}
 		input, select{
 			margin:3px;
 			padding:3px;
 		}
 		.form-outline{
-			border: 1px solid black;
+            border: 1px solid var(--main-foreground-color);
 			display:inline-block;
+			border-radius:3px;
+			background-color:rgba(180,25,250,0.15);
 			margin:5px;
 			padding:5px;
+			& :is(input[type="number"], select, input[type="submit"]){
+				background-color: white;
+	            border: 1px solid var(--main-foreground-color);
+	            border-radius:3px;
+			}
+			& input[type="submit"]:hover{
+            	filter:brightness(80%);
+			}
 		}
 		.new-game{
 			font-size:1.5em;
+		}
+		label{
+			user-select:none;
+		}
+		.fake-btn{
+			font-family:sans-serif;
+			background-color: var(--secondary-background-color);
+            border: 1px solid var(--main-foreground-color);
+            border-radius:5px;
+            color:var(--main-foreground-color);
+            padding:3px;
+            text-decoration:none;
+            &:hover{
+            	filter:brightness(80%);
+            }
 		}
 	</style>
 	<script>
@@ -52,15 +75,12 @@
 			<label for="time-limit-box">Time Limit </label><input type="checkbox" name="time_limit" id="time-limit-box" onchange="setTimeInputActive(event)"><input type="number" min="0" max="999" name="time_limit_minutes"> min <input type="number" min="0" max="59" name="time_limit_seconds"> sec 
 			<br>
 			<input type="submit" value="New game" class="new-game"/>
+			<br>
+			<input type="checkbox" name="challenge" id="challenge-box"><label for="challenge-box">Challenge others</label>
 		</div>
-		<br>
-		<input type="checkbox" name="challenge" id="challenge-box"><label for="challenge-box">Challenge</label>
 	</form>
 	<br/>
-	<form autocomplete="off" method="post"  action="/createduel/<%= mapid %>">
-		<input type="submit" value="Duel in <%= mapname %>">
-		</input>
-	</form>
+	<a href="/createduel/<%= mapid %>" class="fake-btn">Duel in <%= mapname %></a>
 	<script>
 		window.addEventListener('load', () => {
 			setTimeInputActive({target:document.getElementsByName("time_limit")[0]})

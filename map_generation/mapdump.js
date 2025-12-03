@@ -1,4 +1,4 @@
-
+const fs = require('fs');
 const MapFile = require(__dirname+"/../map_file_storage.js");
 const mapid = process.argv[2];
 const outfilename = process.argv[3] ?? "./locations.json";
@@ -8,7 +8,10 @@ if(!mapid){
 }
 ;(async ()=>{
 const map = await MapFile.open(mapid);
-await map.dump(outfilename);
+const outfp = await fs.promises.open(outfilename, 'w');
+const stream = outfp.createWriteStream({flush:true});
+await map.dump(stream);
 console.log(`dumped to ${outfilename}`);
 map.close();
+outfp.close()
 })();

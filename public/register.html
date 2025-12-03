@@ -4,6 +4,7 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Register</title>
+	<link rel="stylesheet" href="/global_styles.css"/>
 	<link rel="stylesheet" href="/form_page_style.css"/>
 	<script>
 		function showError(msg){
@@ -35,13 +36,19 @@
 	</script>
 </head>
 <body>
-	<h3>Register</h3>
-	<form id="register-form" onsubmit="sendForm(event)">
-		<label for="username">Username</label><input name="username" id="username" type="text"/>
-		<label for="password">Password</label><input name="password" id="password" type="password"/>
-		<label for="confirm-password">Confirm password</label><input name="confirm-password" id="confirm-password" type="password"/>
-		<input type="submit" value="Register" />
-		<div class="error-message" id="error-message">i get em</div>
-	</form>
+<main>
+
+	<div class="main-content">
+		<h3>Register</h3>
+		<br>
+		<form id="register-form" onsubmit="sendForm(event)">
+			<label for="username">Username</label><input name="username" id="username" type="text"/>
+			<label for="password">Password</label><input name="password" id="password" type="password"/>
+			<label for="confirm-password">Confirm password</label><input name="confirm-password" id="confirm-password" type="password"/>
+			<input type="submit" value="Register" />
+			<div class="error-message" id="error-message">i get em</div>
+		</form>
+	</div>
+</main>
 </body>
 </html>

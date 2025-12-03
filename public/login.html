@@ -4,6 +4,7 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Login</title>
+	<link rel="stylesheet" href="/global_styles.css"/>
 	<link rel="stylesheet" href="/form_page_style.css"/>
 	<script>
 		function showError(msg){
@@ -51,16 +52,22 @@
 	</script>
 </head>
 <body>
-	<h3>Login</h3>
-	<form id="login-form" onsubmit="sendForm(event)">
-		<label for="username">Username</label><input name="username" id="username" type="text"/>
-		<label for="password">Password</label><input name="password" id="password" type="password"/>
-		<input type="submit" value="Log in" />
-		<div class="error-message" id="error-message">i get em</div>
-	</form>
-	<br>
-	<a onclick="guestLogin(event)" href="#">Or continue as a guest</a>
-	<br><br>
-	<a href="/register.html">Or register an account here</a>
+<main>
+	<div class="main-content">
+		<h3>Log in</h3>
+		<br>
+		<form id="login-form" onsubmit="sendForm(event)">
+			<label for="username">Username</label><input name="username" id="username" type="text"/>
+			<label for="password">Password</label><input name="password" id="password" type="password"/>
+			<input type="submit" value="Log in" />
+			<div class="error-message" id="error-message">i get em</div>
+		</form>
+		<br>
+		<br>
+		<a onclick="guestLogin(event)" href="#">Or continue as a guest</a>
+		<br><br>
+		<a href="/register.html">Or register an account</a>
+	</div>
+</main>
 </body>
 </html>

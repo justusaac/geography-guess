@@ -4,31 +4,35 @@
 	<meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Maps</title>
+    <link rel="stylesheet" href="/global_styles.css"/>
     <link rel="stylesheet" href="/form_page_style.css"/>
     <style>
         input[type="submit"]{
             grid-column: span 1;
         }
         form{
-            width:auto;
             grid-template-columns: 1fr max-content;
+            display:grid;
         }
         #form-results, #world-map{
             display:grid;
-            grid-template-columns: repeat(auto-fill, minmax(clamp(100%/4, 20em, 100%), auto));
+            grid-template-columns: repeat(auto-fill, minmax(clamp(0%, 25em, 100%), auto));
         }
         .map-card{
-            border: 1px solid black;
+            overflow-wrap:anywhere;
+            box-shadow:0 0 2px 0px var(--main-foreground-color);
+            border: 1px solid var(--main-foreground-color);
             border-radius:3px;
             padding:3px;
             margin:3px;
             color:black;
             text-decoration:none;
             box-sizing:border-box;
-            background-color:#c9f2ff;
+            background:linear-gradient(115deg, #c9f2ff, #fdbeff);
+            background-attachment:fixed;
         }
         #world-map > .map-card{
-            background-color:#fff17f;
+            background:linear-gradient(to right in hsl, #fff17f, #ffd15f);
         }
         .map-description{
             display:inline-block;
@@ -47,7 +51,7 @@
             const root = document.createElement('a');
             root.classList.add("map-card")
             root.href=`/creategame/${info.mapid}`
-            const header = document.createElement('h3');
+            const header = document.createElement('b');
             header.style.display="inline"
             header.textContent = info.mapname
             root.appendChild(header);

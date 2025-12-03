@@ -3,34 +3,30 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/global_styles.css"/>
+	<link rel="stylesheet" href="/form_page_style.css"/>
 	<title>Duel lobby</title>
 	<style>
-		body{
-			font-family:sans-serif;
-		}
 		.rules-form{
-			border:1px solid black;
-			margin:5px;
-			padding:5px;
+			display:inline-block;
 			line-height:2em;
-		}
-		.room-content{
-			display:flex;
-			flex-direction:row;
-			flex-wrap:wrap;
 		}
 		input[readonly]{
 			background-color:gray;
+			opacity:20%;
+		}
+		input, select{
+
+            border: 1px solid var(--main-foreground-color);
+            border-radius:3px;
+            padding:2px;
+            color: var(--main-foreground-color);
+            &:disabled{
+            	border: 1px solid rgba(0,0,0,0);
+            }
 		}
 		.player-list-container{
-			border:1px solid black;
-			margin:5px;
-			padding:5px;
-		}
-		.error-container{
-			background-color: pink;
-			margin: 5px;
-			padding: 5px;
+			display:inline-block;
 		}
 		.start-button{
 			font-size: 1.5em;
@@ -41,14 +37,42 @@
 		}
 		.team-name-input{
 			font-size:110%;
+			border-radius:4px;
 		}
 		.user-list-element{
 			padding:1px;
+			border-radius:3px;
 		}
 		.spacer{
 			&::marker{
 				content:"";
 			}
+		}
+		.main-content{
+			width:auto;
+			display:block;
+			background:linear-gradient(to right in hsl, rgba(0,130,0,0.15), rgba(0,0,200,0.15));
+		}
+		.error-message{
+			width:auto;
+			min-width:unset;
+			max-width:unset;
+		}
+		label{
+			user-select:none;
+			& input[type="checkbox"]{
+				margin:0;
+				accent-color:#c00;
+				position:relative;
+				top:1px;
+			}
+			display:inline-block;
+		}
+		.maplink{
+			color:revert;
+		}
+		.multipliers-adjustment{
+			margin:0;
 		}
 	</style>
 	<script>
@@ -203,7 +227,7 @@
 					txt.textContent += " (Leader)";
 				}
 				if(user === "<%= username %>"){
-					li.style.backgroundColor='#fffab0';
+					li.style.backgroundColor='rgba(255,255,180,0.5)';
 				}
 				li.appendChild(txt);
 				return li;
@@ -230,10 +254,12 @@
 					}
 					team_li.appendChild(players_ul);
 				}
-				const spacing_li = document.createElement('li');
-				spacing_li.classList.add("spacer");
-				spacing_li.appendChild(document.createElement('hr'));
-				root.appendChild(spacing_li);
+				if(root.children.length>0){
+					const spacing_li = document.createElement('li');
+					spacing_li.classList.add("spacer");
+					spacing_li.appendChild(document.createElement('hr'));
+					root.appendChild(spacing_li);
+				}
 				for(const user of users){
 					if(found_users.has(user)){
 						continue;
@@ -252,13 +278,16 @@
 					elem.disabled = (owner != "<%= username %>")
 				}
 			}
+			for(const elem of document.getElementsByClassName("notification-check")){
+				elem.disabled = false;
+			}
 
 		}
 		function show_error(err){
-			for(const elem of document.getElementsByClassName("error-container")){
+			for(const elem of document.getElementsByClassName("error-message")){
 				elem.style.display = "block";
 			}
-			for(const elem of document.getElementsByClassName("error-message")){
+			for(const elem of document.getElementsByClassName("error-reason")){
 				elem.textContent = err.reason
 			}
 		}
@@ -272,53 +301,62 @@
 </head>
 <body>
 	<%- include('navheader'); %>
-	<div style="display:none;" class="error-container">
+	<div style="display:none;" class="error-message">
 		Disconnected:
-		<div class="error-message"></div>
+		<span class="error-reason"></span>
+		<br>
 		(try reloading)
 	</div>
 	<br>
 	Join link: <a id="challengelink" href="erm">erm</a> <button class="copybutton" onclick="copyLink()">Copy</button>
 	<br>
 	<br>
-	Map: <a href="/creategame/<%=mapid%>"><b><%= mapname %></b></a>
+	Map: <a class="maplink" href="/creategame/<%=mapid%>"><b><%= mapname %></b></a>
 	<br>
-	<form class="room-content" autocomplete="off" id="rules-form">
+	<form class="main-content" autocomplete="off" id="rules-form">
 		<span class="rules-form">
-			<label for="public-box">Public</label><input type="checkbox" name="public" id="public-box">
+			<label for="public-box">Public <input type="checkbox" name="public" id="public-box"></label>
 			<br>
-			<label for="max-player-box">Max players</label><input type="checkbox" id="max-player-box" name="max_player_box"><input type="number" min="2" value="2" name="max_player_count" id="max_player_count" >
+			<label for="max-player-box">Max players <input type="checkbox" id="max-player-box" name="max_player_box"><input type="number" min="2" value="2" name="max_player_count" id="max_player_count" ></label>
+			<br>
+			<label for="notification-check">Join notifications <input type="checkbox" id="notification-check" class="notification-check"/></label>
 		</span>
+		<hr/>
 		<span class="rules-form">
+			<b>Rules</b>
+			<br>
 			<select name="freedom">
 				<option value="moving" selected>Moving</option>
 				<option value="nm">No Moving</option>
 				<option value="nmpz">No Moving, Panning or Zooming</option>
 			</select>
 			<br>
-			<label for="time-limit-box">Time Limit </label><input type="checkbox" name="time_limit" id="time-limit-box"><input type="number" min="0" max="999" name="time_limit_minutes"> min <input type="number" min="0" max="59" name="time_limit_seconds"> sec 
+			<label for="time-limit-box">Time Limit <input type="checkbox" name="time_limit" id="time-limit-box"><input type="number" min="0" max="999" name="time_limit_minutes"> min <input type="number" min="0" max="59" name="time_limit_seconds"> sec </label>
 			<br>
-			<label for="time-limit-after-guess-box">Time Limit after guess </label><input type="checkbox" name="time_limit_after_guess" id="time-limit-after-guess-box"><input type="number" min="0" max="999" name="time_limit_minutes_after_guess"> min <input type="number" min="0" max="59" name="time_limit_seconds_after_guess"> sec 
+			<label for="time-limit-after-guess-box">Time Limit after guess <input type="checkbox" name="time_limit_after_guess" id="time-limit-after-guess-box"><input type="number" min="0" max="999" name="time_limit_minutes_after_guess"> min <input type="number" min="0" max="59" name="time_limit_seconds_after_guess"> sec </label>
 			<br>
-			<label for="max-health-input">Starting Health </label><input type="number" name="max_health" id="max-health-input" step="1000" min="0">
+			<label for="max-health-input">Starting Health <input type="number" name="max_health" id="max-health-input" step="1000" min="0"></label>
 			<br>
-			<label for="multipliers-box">Multipliers </label><input type="checkbox" name="multipliers" id="multipliers-box">
-			<ul style="margin:0">
-				<li class="multipliers-adjustment"><input type="number" min="2" max="999" name="multipliers_start"> First round</li>
-				<li class="multipliers-adjustment"><input type="number" min="0" max="1" step="0.1" name="multipliers_step"> Increase rate</li>
-			</ul>
+			<label for="multipliers-box">Multipliers <input type="checkbox" name="multipliers" id="multipliers-box">
+				<ul class="multipliers-adjustment">
+					<li><input type="number" min="2" max="999" name="multipliers_start"> First round</li>
+					<li><input type="number" min="0" max="1" step="0.1" name="multipliers_step"> Increase rate</li>
+				</ul>
+			</label>
+			
 		</span>
+		<hr/>
 		<span class="player-list-container">
-			<label for="team-box">Teams</label><input type="checkbox" id="team-box" name="teams"><input type="number" min="2" name="team_count" id="team_count" value="2">
-			<br>
 			<b>Players</b>
+			<br>
+			<label for="team-box">Teams <input type="checkbox" id="team-box" name="teams"><input type="number" min="2" name="team_count" id="team_count" value="2"></label>
+			<br>
 			<ul class="player-list">
 			</ul>
 		</span>
+		<br>
+		<button type="button" disabled class="start-button">Start Duel</button>
 	</form>
-	<button disabled class="start-button">Start Duel</button>
-	<br>
-	<input type="checkbox" id="notification-check" class="notification-check" autocomplete="off"/><label for="notification-check">Join notifications</label>
 	<script>
 
 window.addEventListener('load', () => {

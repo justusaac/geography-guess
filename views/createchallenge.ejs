@@ -3,30 +3,41 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/global_styles.css"/>
+	<link rel="stylesheet" href="/form_page_style.css"/>
 	<title><%= mapname %> challenge</title>
 	<style>
-		body{
-			font-family:sans-serif;
-		}
-		input{
+		input[type="submit"]{
 			margin:3px;
-			padding:3px;
+			padding:5px;
 			border: 1px solid black;
+			font-size:125%;
+			border-radius:5px;
+		}
+		body{
+			text-align:center;
+		}
+		.main-content{
+			text-align: start;
+			background:rgba(150,100,0,0.15);
+			width:auto;
 		}
 	</style>
 </head>
 <body>
 	<%- include('navheader'); %>
-	<h3>Challenge from <u><%=challenger%></u></h3>
-	<h4>Map: <a href="/creategame/<%=mapid%>"><b><%= mapname %></b></a></h4>
-	<b>Rules:</b><br>
-	<% for(const key of ["Moving","Panning","Zooming"]){ %>
-		<%-`${key}: ${gameinfo.rules[key.toLowerCase()] ? '<span style="color:green;">Allowed</span>' : '<span style="color:red;">Not allowed</span>'}`%><br>
-	<% } %>
-	Time limit: <%- gameinfo.rules.time_limit ? ('<span style="color:red;">'+((limit) => limit<60000 ? `${limit/1000} seconds` : `${Math.floor(limit/1000/60)}:${(limit/1000%60).toString().padStart(2,"0")}`)(gameinfo.rules.time_limit)+'</span>') : '<span style="color:green;">Unlimited</span>' %>
-	<br><br>
-	<form method="post" id="new-game-form" action="/challenge/<%= gameid %>">
-		<input type="submit" value="Accept challenge" />
-	</form>
+	<span class="main-content">
+		<b>Challenge from <u><%=challenger%></u></b>
+		<h4>Map: <a style="color:revert;" href="/creategame/<%=mapid%>"><b><%= mapname %></b></a></h4>
+		<b>Rules:</b><br>
+		<% for(const key of ["Moving","Panning","Zooming"]){ %>
+			<%-`${key}: ${gameinfo.rules[key.toLowerCase()] ? '<span style="color:green;">Allowed</span>' : '<span style="color:red;">Not allowed</span>'}`%><br>
+		<% } %>
+		Time limit: <%- gameinfo.rules.time_limit ? ('<span style="color:red;">'+((limit) => limit<60000 ? `${limit/1000} seconds` : `${Math.floor(limit/1000/60)}:${(limit/1000%60).toString().padStart(2,"0")}`)(gameinfo.rules.time_limit)+'</span>') : '<span style="color:green;">Unlimited</span>' %>
+		<br><br>
+		<form method="post" id="new-game-form" action="/challenge/<%= gameid %>">
+			<input type="submit" value="Accept challenge" />
+		</form>
+	</span>
 </body>
 </html>

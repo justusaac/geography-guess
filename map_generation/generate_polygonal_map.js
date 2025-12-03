@@ -18,6 +18,7 @@ const parameter_regexes = {
 const help_regex = /^-?-h(elp)?$/i;
 const parameters = {
 	desired_locations:1000,
+	boundaries:[]
 };
 next_arg: for(let i=2; i<process.argv.length; i++){
 	const arg = process.argv[i];
@@ -33,14 +34,19 @@ Anything else : Output map name (default based on polygon file)
 	}
 	for(const prop in parameter_regexes){
 		if(parameter_regexes[prop].test(arg)){
-			parameters[prop] = arg;
+			if(prop=="boundaries"){
+				parameters[prop].push(arg)
+			}
+			else{
+				parameters[prop] = arg;
+			}
 			continue next_arg;
 		}
 	}
 	parameters.mapname = arg;
 }
 
-parameters.mapname ??= path.basename(parameters.boundaries ?? "World").split(".")[0];
+parameters.mapname ??= path.basename(parameters.boundaries[0] ?? "World").split(".")[0];
 const {desired_locations, boundaries, mapname} = parameters;
 
 ;(async ()=>{
@@ -107,7 +113,7 @@ app.ws("/locationstream", (ws,req) => {
 const port_number = 8123
 
 app.listen(port_number, () => {
-	console.log(`Adding ${desired_locations} locations\n-from ${boundaries ?? "the entire world"}\n-to ${mapname}`)
+	console.log(`Adding ${desired_locations} locations\n-from ${boundaries.length>0 ? (boundaries.length>1 ? JSON.stringify(boundaries) : boundaries[0]) : "the entire world"}\n-to ${mapname}`)
 })
 const startBrowserSearch = (() => {
 	const browsertextparts = [`
@@ -115,12 +121,12 @@ const startBrowserSearch = (() => {
 	const get_point = (() => {
 		const module = {};
 		${fs.readFileSync(__dirname+"/../polygons.js")};
-		const poly = ${
-			boundaries
-			? (fs.readFileSync(boundaries))
-			: JSON.stringify([[[[180,-90],[180,90],[-180,90],[-180,-90],[180,-90]]]])
+		const polys = ${
+			boundaries.length
+			? '['+boundaries.map(x=>fs.readFileSync(x, {encoding:'utf8'})).join(',')+']'
+			: JSON.stringify([[[[[180,-90],[180,90],[-180,90],[-180,-90],[180,-90]]]]])
 		} 
-		const gen = random_sample_polygon(poly)
+		const gen = random_sample_polygon(...polys)
 		return ()=>{
 			[lng,lat] = gen.next().value
 			return {lng,lat}
@@ -132,6 +138,10 @@ const startBrowserSearch = (() => {
 		const svs = new google.maps.StreetViewService();
 		let completed_locations = 0;
 		const socket = new WebSocket("ws://localhost:${port_number}/locationstream");
+		await new Promise((resolve)=>{
+			socket.onopen = resolve
+		})
+		console.log("WS connected");
 		while(completed_locations<desired_locations){
 			let barrier_resolve;
 			const timeoutid = setTimeout(()=>{

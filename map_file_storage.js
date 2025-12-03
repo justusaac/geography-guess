@@ -1,6 +1,5 @@
 require('dotenv').config({path:__dirname+"/.env"});
 const pg = require('pg');
-const fs = require('fs');
 const {LargeObjectManager, LargeObject} = require('pg-large-object');
 
 const PROPERTIES = ["lat","lng","zoom","heading","pitch"];
@@ -209,27 +208,23 @@ class MapFile{
 		}
 		return output;
 	}
-	async dump(outfile="./locations.json"){
-		const outfp = await fs.promises.open(outfile, 'w');
-		const stream = outfp.createWriteStream({flush:true});
-		stream.write("[")
+	async dump(outstream){
+		outstream.write("[")
 		let comma = false;
 		for await(const loc of this.read_all_locs()){
 			if(comma){
-				stream.write(",")
+				outstream.write(",")
 			}
 			else{
 				comma=true;
 			}
-			stream.write(JSON.stringify(loc))
+			outstream.write(JSON.stringify(loc))
 		}
-		stream.write("]")
-		outfp.close()
+		outstream.write("]")
 	}
-	async import(infile){
+	async import(readstream){
 		await this.largeobject.seekAsync(0, LargeObject.SEEK_END);
 		const writestream = this.largeobject.getWritableStream(BUFFER_SIZE * 500);
-		const readstream = fs.createReadStream(infile, {encoding:'utf8'});
 		let charbuf = '';
 		let object_nest_depth = 0;
 		let string_starter = null;

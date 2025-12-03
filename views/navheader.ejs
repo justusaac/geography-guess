@@ -1,33 +1,54 @@
 <nav style="
 	border-bottom:1px solid gray;
-	padding:5px;
-	padding-top:0px;
 	display:flex;
 	justify-content:space-between;
+	flex-wrap:wrap;
+	gap:10px;
+	padding:5px;
+	padding-top:0px;
 ">
-	<span>
-		<span>
-			<a href="/maplist">Maps</a>
-		</span>
-		|
-		<span>
-			<a href="/settings">Settings</a>
-		</span>
-		|
-		<span>
-			<a href="/dailychallenge">Daily challenge</a>
-		</span>
-		|
-		<span>
-			<a href="/duels">Duels</a>
-		</span>
+	<style>
+		.navlink{
+			color:#5b5bff;
+		}
+		.link-container{
+			display:flex;
+			flex-wrap:wrap;
+			height:min-content;
+			& > :not(:first-child){
+				border-style:solid;
+				border-width:0px;
+				border-left-width:1px;
+
+			}
+			& > *{
+				padding: 1px 5px;
+			}
+			& > a:hover{
+				background-color:rgba(1,1,1,0.07);
+			}
+		}
+	</style>
+	<span class="link-container">
+		<a class="navlink" href="/maplist">Maps</a>
+		<a class="navlink" href="/settings">Settings</a>
+		<a class="navlink" href="/dailychallenge">Daily&nbsp;challenge</a>
+		<a class="navlink" href="/duels">Duels</a>
 	</span>
+	<span></span>
 	<span>
+		<a href="/" style="color:unset; text-decoration:none; font-size:1.2em;">
+			StreetSearch
+		</a>
+	</span>
+	<span></span>
+	<span></span>
+	<span class="link-container">
 		<% if(username) { %>
-			<%= username %> | 
-			<a href="/logout">Log out</a>
+			<span><%= username %></span>
+			<a class="navlink" href="/logout">Log&nbsp;out</a>
 		<% } else { %>
-			<a href="/login.html">Log in</a>
+			<a class="navlink" href="/login.html">Log&nbsp;in</a>
 		<% } %>
 	</span>
 </nav>

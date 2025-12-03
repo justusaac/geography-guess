@@ -4,6 +4,7 @@
 	<meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Duel</title>
+    <link rel="stylesheet" href="/global_styles.css"/>
     <link rel="stylesheet" href="/MysteryPanoStyle.css"/>
     <style>
     	.health-bar{
@@ -347,7 +348,7 @@
 							const username_td = document.createElement('td');
 							username_td.textContent = user;
 							if(user==this.game_info.you){
-								username_td.style.backgroundColor = '#fffab0';
+								username_td.classList.add('highlighted');
 							}
 							tr.appendChild(username_td);
 							const points_td = document.createElement('td');
@@ -399,7 +400,9 @@
 					const table = document.createElement("table");
 					table.classList.add("game-results-table");
 					const header = document.createElement("thead");
-					header.appendChild(document.createElement("td"));
+					const filler_th = document.createElement("th");
+					filler_th.style.border="none";
+					header.appendChild(filler_th);
 					for(const team of team_order){
 						const th = document.createElement("th");
 						th.textContent = team;

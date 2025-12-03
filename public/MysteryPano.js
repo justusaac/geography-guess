@@ -19,7 +19,12 @@ class MysteryPano{
 		);
 		this.map.decor = [];
 		this.adjust_expanded_map(true);
-		this.socket.addEventListener("close", (e)=>this.show_error(`Websocket connection lost${e.reason?': "':''}${e.reason}${e.reason?'"':''}`));
+		this.socket.addEventListener("close", (e)=>{
+			this.show_error(`Websocket connection lost${e.reason?': "':''}${e.reason}${e.reason?'"':''}`)
+			for(const btn of this.root.getElementsByClassName("lock-in-button")){
+				btn.textContent = "Disconnected"
+			}
+		});
 		this.socket.addEventListener("message", msg => {
 			//console.log(msg.data)
 			const data = JSON.parse(msg.data);
@@ -661,7 +666,9 @@ class MysteryPano{
 			for(const [username, guesses] of all_players){
 				const row = document.createElement('tr');
 				const td = document.createElement('td');
-				td.style.backgroundColor = game_info.username==username ? "#fffab0" : "unset";
+				if(game_info.username==username){
+					td.classList.add("highlighted");
+				}
 				td.style.cursor = "pointer";
 				td.innerHTML = username;
 				td.addEventListener("click", () => {

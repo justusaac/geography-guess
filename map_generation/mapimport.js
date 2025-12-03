@@ -17,8 +17,9 @@ if(!mapid){
 	mapid = await MapFile.create(mapname, `Imported ${mapname} map`, site_admin_user_id);
 }
 const map = await MapFile.open(mapid,true);
-
-await map.import(infilename);
+pool.end();
+const readstream = fs.createReadStream(infilename, {encoding:'utf8'});
+await map.import(readstream);
 console.log(`imported to ${mapname}`);
 await map.update_metadata();
 await map.close();

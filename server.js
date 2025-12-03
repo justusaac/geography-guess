@@ -133,9 +133,21 @@ async function check_duplicate_challenge (req, res, next) {
     }
     next();
 }
-app.get('/maps_api_key', require_auth, (req,res) => {
-    res.end(process.env.MAPS_API_KEY)
-})
+app.get('/maps_api_key', require_auth, (()=>{
+    const keys = [];
+    for(const k in process.env){
+        if(/maps_api_key/i.test(k)){
+            keys.push(process.env[k]);
+        }
+    }
+    if(!keys.length){
+        keys.push("")
+    }
+    return (req,res) => {
+        const idx = Math.floor(Math.random()%keys.length);
+        res.end(keys[idx])
+    }
+})())
 async function create_game(res,mapid,userid,rules){
     const map_result = await db_pool.query("select * from Maps where MapID=$1::int",[mapid])
     mapid = map_result.rows[0]?.mapid;
@@ -601,7 +613,7 @@ const create_duel = async (rules, userid, mapid) =>{
     const duelid = result.rows[0].duelid;
     return duelid;
 }
-app.post("/createduel/:id", require_auth, async (req, res)=> {
+app.get("/createduel/:id", require_auth, async (req, res)=> {
     const userid = req?.session?.passport?.user?.id;
     const mapid = Number(req.params.id) || -1;
     const map = (await db_pool.query("select ScoreModifier from Maps where MapID=$1::int",[mapid])).rows[0]
@@ -656,11 +668,13 @@ app.ws("/duelroomsession/:id", asyncWrapper(async (ws,req) => {
     const row = (await client.query("select Duels.DuelID, Duels.DuelInfo, Duels.MainUserID, Duels.MapID, Duels.Public, Duels.MaxPlayers, Duels.Started, OwnerUsers.Username as ownername, array_agg(OpponentUsers.Username) as opponentnames,  Maps.MapName, Maps.ScoreModifier from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=any(Duels.OpponentUserIDs) left join Maps on Maps.MapID=Duels.MapID where DuelID=$1::uuid group by Duels.DuelID, Duels.DuelInfo, Duels.MapID, ownername, Maps.MapName, Maps.ScoreModifier, Duels.MainUserID, Duels.Public, Duels.MaxPlayers, Duels.Started", [duelId])).rows[0];
     if(!row){
         ws.close(3001, "Duel not found");
+        client.end()
         return;
     }
     if(row.started){
         ws.send(JSON.stringify({type:"start_duel"}));
         ws.close(3001, "Duel started already");
+        client.end()
         return;
     }
     const notify_rules = async () => client.query(`select pg_notify($1::text, jsonb_build_object('type','update_rules','info',jsonb_set(jsonb_set(DuelInfo->'rules', '{max_players}', coalesce(MaxPlayers::text::jsonb,'null'::jsonb), true), '{public}', Public::text::jsonb, true))::text) from Duels where DuelID=$2::uuid; `, [channelId, duelId]);
@@ -764,7 +778,7 @@ app.ws("/duelroomsession/:id", asyncWrapper(async (ws,req) => {
                 client.query("select 67 from Duels where DuelID=$1::uuid for update;",[duelId]);
                 const result = await client.query("select Duels.DuelInfo, OwnerUsers.Username as ownername, array_agg(OpponentUsers.Username) as opponentnames from Duels left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=any(Duels.OpponentUserIDs) where DuelID=$1::uuid group by Duels.DuelInfo, ownername;", [duelId]);
                 const rules = result.rows[0].duelinfo.rules;
-                const unaccounted_players = new Set([result.rows[0].ownername, ...result.rows[0].opponentnames]);
+                const unaccounted_players = new Set([result.rows[0].ownername, ...result.rows[0].opponentnames.filter(x=>x!=null)]);
                 const new_teams = {};
                 for(const [teamname, teamplayers] of Object.entries(rules.teams || {})){
                     for(const player of teamplayers){

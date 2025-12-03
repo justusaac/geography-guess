@@ -1,0 +1,16 @@
+:root{
+	--main-background-color:#f7fcfe;
+	--main-foreground-color:#002000;
+	--secondary-background-color:#dcdddd;
+}
+body{
+	background-color:var(--main-background-color);
+	color:var(--main-foreground-color);
+	border-color:var(--main-foreground-color);
+}
+body{
+	font-family: "verdana", sans-serif;
+}
+hr{
+	color:var(--main-foreground-color);
+}

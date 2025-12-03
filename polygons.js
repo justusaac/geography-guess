@@ -41,10 +41,16 @@ function geojson_polygon_search(geojson){
 	return results
 }
 //The "rejection sampling" approach is not the fastest/best but generating the maps is so much IO bound that it is ok
-function* random_sample_polygon(coords){
-	if(!Array.isArray(coords)){
-		yield* random_sample_polygon(geojson_polygon_search(coords));
+function* random_sample_polygon(...args){
+	for(let i=0; i<args.length; i++){
+		if(!Array.isArray(args[i])){
+			args[i] = geojson_polygon_search(args[i]);
+		}
+		if(i>0){
+			args[0].push(...args[i])
+		}
 	}
+	const coords = args[0];
 	//coords = geojson multipolygon coordinates format
 	const segments = []
 	const bounds = {
