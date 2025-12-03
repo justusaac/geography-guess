@@ -597,7 +597,7 @@ app.get("/logout", (req, res, next) => {
 });
 
 const create_duel = async (rules, userid, mapid) =>{
-    const max_players = rules.max_players
+    const max_players = rules.max_players===undefined ? 2 : rules.max_players;
     const public_setting = rules.public
     delete rules.max_players;
     delete rules.public;
@@ -609,7 +609,7 @@ const create_duel = async (rules, userid, mapid) =>{
         finishTimes:[],
         health_before:[]
     }
-    const result = await db_pool.query("insert into Duels (MainUserID, DuelInfo, MapID, OpponentUserIDs, MaxPlayers, Public) values ($1::integer, $2::jsonb, $3::integer, ARRAY[]::integer[], coalesce($4::integer, 2), coalesce($5::boolean, false)) returning DuelID;", [userid, gameinfo, mapid, max_players, public_setting]);
+    const result = await db_pool.query("insert into Duels (MainUserID, DuelInfo, MapID, OpponentUserIDs, MaxPlayers, Public) values ($1::integer, $2::jsonb, $3::integer, ARRAY[]::integer[], $4::integer, coalesce($5::boolean, false)) returning DuelID;", [userid, gameinfo, mapid, max_players, public_setting]);
     const duelid = result.rows[0].duelid;
     return duelid;
 }

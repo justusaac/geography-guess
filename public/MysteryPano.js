@@ -461,9 +461,10 @@ class MysteryPano{
 		//Dodge yellow as it is the correct location markers color
 		const hue = x%330 + (x%330>35)*30;
 		x = (a*x+c)%m;
-		const saturation = 100-x%50;
+		const saturation = 90-x%40;
 		x = (a*x+c)%m;
-		const lightness = 70-x%40;
+		const lightness = 61-x%25;
+		console.log(str,`hsl(${hue}, ${saturation}%, ${lightness}%)`);
 		return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 	}
 	add_round_to_map(guess, actual, label_guess = '?', label_actual='★', username=null, teamname=null){

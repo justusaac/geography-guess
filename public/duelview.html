@@ -47,6 +47,12 @@
 		.game-info tr:first-child td{
 			padding-top:3px;
 		}
+		.red-highlight{
+			background-color: rgba(255,90,90,0.35);
+		}
+		.green-highlight{
+			background-color: rgba(90,255,90,0.3);
+		}
     </style>
 </head>
 <body>
@@ -501,10 +507,10 @@
 							const health_after = game_info.health_before[i+1][team];
 							const delta = health_after-health_before;
 							if(health_after==0){
-								td.style.backgroundColor = "#FFCCCC"
+								td.classList.add("red-highlight")
 							}
 							else if(i+1==game_info.health_before.length-1){
-								td.style.backgroundColor = "#CCFFCC"
+								td.classList.add("green-highlight")
 								show_round_on_map();
 								const statusmsg = document.createElement("span");
 								statusmsg.style.fontSize = "1.5em";
