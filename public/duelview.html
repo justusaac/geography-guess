@@ -184,8 +184,12 @@
 					}
 				}
 				this.most_recent_msg = curr_msg;
+				this.update_guesses(round_data.guesses, round_data.start_time)
+			}
+			update_guesses(guesses, start_time){
+
 				//Timer will be set to overall round timer however actual timer maybe shorter if someones already guessed
-            	const lock_in_time = Object.values(round_data.guesses).reduce((acc,curr)=>{
+            	const lock_in_time = Object.values(guesses).reduce((acc,curr)=>{
             		if(!acc){
             			return curr.final;
             		}
@@ -195,14 +199,17 @@
             		return Math.min(acc,curr.final)
             	}, false);
             	const now = Date.now();
-	            let time_left_normal = (this.game_info.rules.time_limit || Infinity)-(now-round_data.start_time);
+	            let time_left_normal = (this.game_info.rules.time_limit || Infinity)-(now-start_time);
                 let time_left_post_guess = (this.game_info.rules.time_limit_after_guess || Infinity)-(now-(lock_in_time || Infinity))
             	if(time_left_post_guess<time_left_normal){
 					this.set_timer(lock_in_time, this.game_info.rules.time_limit_after_guess);
 				}
+
+
 				//Has the player already guessed or clicked around
 				//over complicated system to avoid clearing map and flashing unchanged markers
-				const your_guess = round_data.guesses[this.game_info.you]
+				const you_team = Object.keys(this.game_info.rules.teams).filter(t=>this.game_info.rules.teams[t].includes(this.game_info.you))[0];
+				const your_guess = guesses[this.game_info.you]
 				if(your_guess){
 					if(!this.marker){
 						this.marker = new google.maps.marker.AdvancedMarkerElement();
@@ -222,7 +229,7 @@
 					if(player==this.game_info.you){
 						continue;
 					}
-					const player_guess = round_data.guesses[player]
+					const player_guess = guesses[player]
 					if(!player_guess){
 						continue;
 					}

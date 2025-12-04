@@ -294,7 +294,6 @@ app.ws("/gamesession/:id", asyncWrapper(async (ws, req) => {
         Object.assign(game, gameinfo);
     }
     await refresh();
-    const tentative_guess = {};
     const score_modifier = (await getGame(gameId)).gameinfo.rules.scoremodifier;
     const process_guess = (guess,actual) => {
         let points = 0;
@@ -317,13 +316,14 @@ app.ws("/gamesession/:id", asyncWrapper(async (ws, req) => {
             return;
         }
         for(let i=0; i<game.locations.length; i++){
-            if(!game.guesses[i]){
+            if(!game.guesses[i]?.final){
                 if(game.startTimes[i]){
                     const elapsed = Date.now()-game.startTimes[i]
                     if(elapsed>game.rules.time_limit){
                         const real_location = game.locations[i];
-                        const guess = process_guess({...tentative_guess},real_location);
-                        guess.elapsed = game.rules.time_limit
+                        const guess = process_guess({...game.guesses[i]?.location},real_location);
+                        guess.elapsed = game.rules.time_limit;
+                        guess.final = true;
                         guess.location.lat ??= 0;
                         guess.location.lng ??= 0;
                         game.guesses[i] = guess;
@@ -359,7 +359,7 @@ app.ws("/gamesession/:id", asyncWrapper(async (ws, req) => {
         for(const row of rows){
             const guesses = row.gameinfo.guesses;
             //Only including completed challenges
-            if(guesses[guesses.length-1]){
+            if(guesses[guesses.length-1]?.final){
                 ans[row.username] = guesses;
             }
         }
@@ -374,43 +374,42 @@ app.ws("/gamesession/:id", asyncWrapper(async (ws, req) => {
             return;
         }
         const data = data_;
-        if(data?.type != "update_guess"){
-            await refresh();
-        }
+        await refresh();
         const response = JSON.stringify(check_time_limit() || await {
             //Keys based on data.type
             next_round:()=>{
+                const new_round = data.round
                 let score_so_far = 0;
                 let total_time = 0;
-                for(let i=0; i<game.locations.length; i++){
-                    if(!game.guesses[i]){
-                        if(game.startTimes[i]){
-                            return {
-                                type:"error",
-                                message:"Finish the current round first"
-                            };
-                        }
-                        game.startTimes[i] = Date.now();
-                        backup()
-                        tentative_guess.lat = undefined;
-                        tentative_guess.lng = undefined;
+                for(let i=0; i<new_round; i++){
+                    if(!game.guesses[i]?.final){
                         return {
-                            type:"round",
-                            round:i,
-                            location:game.locations[i],
-                            start_time:game.startTimes[i],
-                            score_so_far
+                            type:"error",
+                            message:"Finish the current round first"
                         };
                     }
                     score_so_far += game.guesses[i].score;
                     total_time += game.guesses[i].elapsed;
                 }
+                if(new_round==game.locations.length){
+                    db_pool.query(`insert into HighScores (UserID, MapID, GameID, Score, Elapsed) with CurrentGame as (select UserID, MapID, GameID, $2::int as Score, $3::int as Elapsed from Games where GameID=$1::uuid) select UserID, MapID, GameID, Score, Elapsed from CurrentGame on conflict (UserID, MapID) do update set ${["GameID", "Score", "Elapsed"].map(col=>`${col}=case when excluded.Score>HighScores.Score or (excluded.Score=HighScores.Score and excluded.Elapsed<HighScores.Elapsed) then excluded.${col} else HighScores.${col} end`).join(',')};`,[gameId, score_so_far, total_time])
+                    return get_game_results();
+                }
+                if(!game.startTimes[new_round]){
+                    game.startTimes[new_round] = Date.now();
+                    backup()
+                }
+                return {
+                    type:"round",
+                    round:new_round,
+                    location:game.locations[new_round],
+                    start_time:game.startTimes[new_round],
+                    score_so_far
+                };
                 
-                db_pool.query(`insert into HighScores (UserID, MapID, GameID, Score, Elapsed) with CurrentGame as (select UserID, MapID, GameID, $2::int as Score, $3::int as Elapsed from Games where GameID=$1::uuid) select UserID, MapID, GameID, Score, Elapsed from CurrentGame on conflict (UserID, MapID) do update set ${["GameID", "Score", "Elapsed"].map(col=>`${col}=case when excluded.Score>HighScores.Score or (excluded.Score=HighScores.Score and excluded.Elapsed<HighScores.Elapsed) then excluded.${col} else HighScores.${col} end`).join(',')};`,[gameId, score_so_far, total_time])
-                return get_game_results();
             },
             show_challengers:async ()=>{
-                if(!game.guesses[game.guesses.length-1]){
+                if(!game.guesses[game.guesses.length-1]?.final){
                     return;
                 }
                 const results = get_game_results();
@@ -419,12 +418,20 @@ app.ws("/gamesession/:id", asyncWrapper(async (ws, req) => {
             },
 
             update_guess:()=>{
-                tentative_guess.lat = data.location.lat;
-                tentative_guess.lng = data.location.lng;
+                if(game.guesses[data.round]?.final){
+                    return {
+                        type:"error",
+                        message:`You've already made a guess for round ${data.round+1}.`
+                    };
+                }
+                const partial_guess = process_guess(data.location, game.locations[data.round])
+                partial_guess.final = false;
+                game.guesses[data.round] = partial_guess;
+                backup();
             },
 
             confirm_guess:()=>{
-                if(game.guesses[data.round]){
+                if(game.guesses[data.round]?.final){
                     return {
                         type:"error",
                         message:`You've already made a guess for round ${data.round+1}.`
@@ -436,10 +443,11 @@ app.ws("/gamesession/:id", asyncWrapper(async (ws, req) => {
                         message:`Round ${data.round+1} has not started yet.`
                     };
                 }
-                const guess_location = {...tentative_guess, ...data.location};
+                const guess_location = {...game.guesses[data.round]?.location, ...data.location};
                 const real_location = game.locations[data.round]
                 const guess = process_guess(guess_location,real_location);
                 guess.elapsed = Date.now()-game.startTimes[data.round];
+                guess.final = true;
                 game.guesses[data.round] = guess;
                 backup();
                 return {
@@ -474,14 +482,15 @@ app.ws("/gamesession/:id", asyncWrapper(async (ws, req) => {
 
         let score_so_far = 0;
         for(let i=0; i<game.locations.length; i++){
-            if(!game.guesses[i]){
+            if(!game.guesses[i]?.final){
                 if(game.startTimes[i]){
                     return {
                         type:"round",
                         round: i,
                         location:game.locations[i],
                         start_time:game.startTimes[i],
-                        score_so_far
+                        score_so_far,
+                        tentative_guess:game.guesses[i]
                     };
                 }
                 return {

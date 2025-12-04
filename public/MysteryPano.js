@@ -26,11 +26,12 @@ class MysteryPano{
 			}
 		});
 		this.socket.addEventListener("message", msg => {
-			//console.log(msg.data)
+			console.log(msg.data)
 			const data = JSON.parse(msg.data);
 			({
 				round:()=>{
 					this.show_pano(data);
+					this.position_marker(data.tentative_guess?.location);
 				},
 				round_results:()=>{
 					this.show_round_results(data);
@@ -252,25 +253,32 @@ class MysteryPano{
 		}
 
 		google.maps.event.addListener(this.map, "click", (e)=>{
-			this.marker ??= new google.maps.marker.AdvancedMarkerElement();
-			this.add_to_map(this.marker);
-			this.marker.position = e.latLng;
-
+			const location = {lat:e.latLng.lat(), lng:e.latLng.lng()};
+			this.position_marker(location);
 			this.socket.send(JSON.stringify({
 				type:"update_guess",
 				round:this.round,
-				location:{lat:e.latLng.lat(), lng:e.latLng.lng()}
+				location
 			}));
 
-			for(const btn of this.root.getElementsByClassName("lock-in-button")){
-				btn.disabled = false;
-			}
 		});
 		if(this.game_info.rules.time_limit){
 			this.set_timer(round_data.start_time, this.game_info.rules.time_limit)
 		}
 		else{
 			this.clear_timer();
+		}
+
+	}
+	position_marker(loc){
+		if(!loc){
+			return;
+		}
+		this.marker ??= new google.maps.marker.AdvancedMarkerElement();
+		this.add_to_map(this.marker);
+		this.marker.position = loc;
+		for(const btn of this.root.getElementsByClassName("lock-in-button")){
+			btn.disabled = false;
 		}
 
 	}
@@ -464,7 +472,6 @@ class MysteryPano{
 		const saturation = 90-x%40;
 		x = (a*x+c)%m;
 		const lightness = 61-x%25;
-		console.log(str,`hsl(${hue}, ${saturation}%, ${lightness}%)`);
 		return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 	}
 	add_round_to_map(guess, actual, label_guess = '?', label_actual='★', username=null, teamname=null){
@@ -567,7 +574,7 @@ class MysteryPano{
 				}`;
 		}
 		for(const btn of this.root.getElementsByClassName("next-round-button")){
-			btn.onclick = ()=>this.socket.send(JSON.stringify({type:"next_round"}));
+			btn.onclick = ()=>this.socket.send(JSON.stringify({type:"next_round", round:round_info.round+1}));
 			if(round_info.round==4){
 				btn.innerHTML = "Results";
 			}
