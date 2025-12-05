@@ -826,48 +826,113 @@ app.ws("/duelroomsession/:id", asyncWrapper(async (ws,req) => {
 app.get("/duel/:id", require_auth_duel_id, async (req, res) => {
     res.sendFile(__dirname+'/public/duelview.html');
 });
-const check_duel_finished = (duel)=>{
+const check_duel_finished = (duel) =>{
     // If less than 2 parties have health left then the games over
     return duel.health_before.length>0 && Object.values(duel.health_before[duel.health_before.length-1]).reduce((acc,curr)=>acc+(curr>0), 0)<2
 }
-app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
-    if(!await check_req_duel_id(req)){
-        ws.close(3001, "Not authenticated");
-        return
-    }
-    const duelId = req.params.id;
+class DuelSessionHandler{
+    async initialize(ws, duelId, username){
+        this.duelId = duelId;
+        this.ws = ws;
+        this.username = username;
+        this.client = new pg.Client();
+        this.ws.on('close',()=>this.client.end());
+        this.client.on('error', (e)=>{
+            this.ws.close(3001, "Database error");
+            console.error("Database error: ",e)
+        })
+        await this.client.connect()
+        this.client.query('begin');
+        this.duelrow = {}
+        try{
+            this.client.query("select 67 from Duels where DuelID=$1::uuid for update;",[duelId]);
+            const row = (await this.client.query('select Duels.DuelInfo, Duels.Started, Maps.MapName, Maps.MapID, OwnerUsers.Username as OwnerName, array_agg(OpponentUsers.Username) as OpponentNames from Duels left join Maps on Duels.MapID=Maps.MapID left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=ANY(Duels.OpponentUserIDs) where DuelID=$1::uuid group by Duels.DuelInfo,  Maps.MapName, Maps.MapID, OwnerName, Duels.Started;', [this.duelId])).rows[0];
+            Object.assign(this.duelrow, row);
+        }
+        catch{
+            return false;
+        }
+        this.duel = this.duelrow?.duelinfo;
+        if(!this.duel){
+            this.ws.close(4004, "Game not found");
+            return false;
+        }
+        if(!this.duelrow.started){
+            this.ws.close(4004, "Not ready");
+            return false;
+        }
+        this.client.on("notification", (msg)=>{
+            const payload = JSON.parse(msg.payload);
+            const {type,info} = payload;
+            if(type=="new_round"){
+                this.duel.locations[info.index] = info.location;
+                this.duel.startTimes[info.index] = info.start_time;
+                this.duel.health_before[info.index] = info.health_before;
+                this.duel.guesses[info.index] ??= {};
+            }
+            else if(type=="finish_round"){
+                this.duel.finishTimes[info.index] = info.finish_time;
+            }
+            else if(type=="update_guess"){
+                const {round, user, guess} = info;
+                this.duel.guesses[round][user] = guess;
+                //If all players that are on a team that has not been eliminated have made a final guess finish the round early
+                const active_teams = Object.keys(this.duel.rules.teams).filter(t=>this.duel.health_before[round][t]>0)
+                if(active_teams.flatMap(t=>this.duel.rules.teams[t]).map((u)=>this.duel.guesses[round][u]?.final).reduce((a,b)=>a&&b, true)){
+                    this.finish_round(round);
+                    return;
+                }
+            }
+            else if(type=="new_duel"){
+                this.ws.send(JSON.stringify({
+                    type:"new_duel",
+                    new_id:info
+                }));
+                return;
+            }
+            this.send_current_state();
+        });
+        this.channelId = `duel_${duelId}`
+        if(!/^[A-Za-z0-9-_]+$/.test(this.channelId)){
+            return false;
+        }
+        this.client.query(`listen "${this.channelId}"`);
+        this.ws.send(JSON.stringify({
+            type:"game_info",
+            you:this.username,
+            owner:this.duelrow.ownername,
+            rules:this.duel.rules,
+            mapname:this.duelrow.mapname,
+            mapid:this.duelrow.mapid
+        }));
+        (await this.check_time_limit()) || (this.send_current_state());
+        this.client.query("commit;");
 
-    const client = new pg.Client();
-    ws.on('close',()=>client.end());
-    client.on('error', (e)=>{
-        ws.close(3001, "Database error");
-        console.error("Database error: ",e)
-    })
-    await client.connect()
-    client.query('begin');
-    const duelrow = {}
-    try{
-
-        client.query("select 67 from Duels where DuelID=$1::uuid for update;",[duelId]);
-        const row = (await client.query('select Duels.DuelInfo, Duels.Started, Maps.MapName, Maps.MapID, OwnerUsers.Username as OwnerName, array_agg(OpponentUsers.Username) as OpponentNames from Duels left join Maps on Duels.MapID=Maps.MapID left join Users as OwnerUsers on Duels.MainUserID=OwnerUsers.UserID left join Users as OpponentUsers on OpponentUsers.UserID=ANY(Duels.OpponentUserIDs) where DuelID=$1::uuid group by Duels.DuelInfo,  Maps.MapName, Maps.MapID, OwnerName, Duels.Started;', [duelId])).rows[0];
-        Object.assign(duelrow, row);
+        const your_team = Object.keys(this.duel.rules.teams).filter(t=>this.duel.rules.teams[t].includes(this.username))[0];
+        this.ws.on("message", async (msg)=>{
+            if(await this.check_time_limit()){
+                return;
+            }
+            let data;
+            try{
+                data = JSON.parse(msg);
+            }
+            catch (error){
+                return;
+            }
+            //Players/teams that have been eliminated cant make guesses
+            if(this.duel.health_before[this.duel.health_before.length-1][your_team]>0){
+                if(data.type == "update_guess"){
+                    this.update_guess(data.location, data.round, false);
+                }
+                else if(data.type == "confirm_guess"){
+                    this.update_guess(data.location, data.round, true);
+                }
+            }
+        });
     }
-    catch{
-        return;
-    }
-    const duel = duelrow?.duelinfo;
-    if(!duel){
-        ws.close(4004, "Game not found");
-        return
-    }
-        
-    if(!duelrow.started){
-        ws.close(4004, "Not ready");
-        return;
-    }
-
-    const score_modifier = duelrow.duelinfo.rules.scoremodifier;
-    const process_guess = (guess,actual) => {
+    process_guess(guess, actual){
+        const score_modifier = this.duelrow.duelinfo.rules.scoremodifier;
         let points = 0;
         let distance = 0;
         if(guess.lat != undefined && guess.lng != undefined){
@@ -882,10 +947,10 @@ app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
             score:points,
             distance
         };
-    };
-    const get_multiplier = (round_idx)=>{
-        const first_round = duel.rules.first_multiplier_round;
-        const step = duel.rules.multiplier_increase;
+    }
+    get_multiplier(round_idx){
+        const first_round = this.duel.rules.first_multiplier_round;
+        const step = this.duel.rules.multiplier_increase;
         if(!first_round || !step){
             return 1;
         }
@@ -893,113 +958,73 @@ app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
             return 1;
         }
         //scaling factor to dodge floating point errors
-        return 1+((step*100)*((round_idx+1)-(first_round-1)))/100;
-    };
-
-    const send_current_state = ()=>{
+        const scaling_factor = 100;
+        return 1+((step*scaling_factor)*((round_idx+1)-(first_round-1)))/scaling_factor;
+    }
+    send_current_state(){
         let current_round = -1;
-        while(duel.startTimes[current_round+1]){
+        while(this.duel.startTimes[current_round+1]){
             current_round++;
         }
         if(current_round==-1){
             return;
         }
-        if(duel.finishTimes[current_round]){
-            ws.send(JSON.stringify({
+        if(this.duel.finishTimes[current_round]){
+            this.ws.send(JSON.stringify({
                 type:"round_results",
                 round:current_round,
-                location:duel.locations[current_round],
-                finish_time:duel.finishTimes[current_round],
-                health_before:duel.health_before[current_round],
-                guesses:duel.guesses[current_round]
+                location:this.duel.locations[current_round],
+                finish_time:this.duel.finishTimes[current_round],
+                health_before:this.duel.health_before[current_round],
+                guesses:this.duel.guesses[current_round]
             }));
         }
         else{
-            if(check_duel_finished(duel)){
-                ws.send(JSON.stringify({
+            if(this.check_duel_finished(this.duel)){
+                this.ws.send(JSON.stringify({
                     type:"game_results",
-                    locations:duel.locations,
-                    health_before:duel.health_before,
-                    guesses:duel.guesses,
-                    startTimes:duel.startTimes,
-                    finishTimes:duel.finishTimes
+                    locations:this.duel.locations,
+                    health_before:this.duel.health_before,
+                    guesses:this.duel.guesses,
+                    startTimes:this.duel.startTimes,
+                    finishTimes:this.duel.finishTimes
                 }));
             }
             else{
-                ws.send(JSON.stringify({
+                this.ws.send(JSON.stringify({
                     type:"round",
                     round:current_round,
-                    location:duel.locations[current_round],
-                    start_time:duel.startTimes[current_round],
-                    health_before:duel.health_before[current_round],
-                    guesses:duel.guesses[current_round]
+                    location:this.duel.locations[current_round],
+                    start_time:this.duel.startTimes[current_round],
+                    health_before:this.duel.health_before[current_round],
+                    guesses:this.duel.guesses[current_round]
                 }));
             }
         }
-    };
-
-    const finish_round = async (round_idx) =>{
+    }
+    async finish_round(round_idx){
         const now = Date.now();
-        client.query("begin;");
-        const duelinfo = (await client.query("select Duels.DuelInfo from Duels where DuelID=$1::uuid for update;", [duelId])).rows[0].duelinfo;
+        this.client.query("begin;");
+        const duelinfo = (await this.client.query("select Duels.DuelInfo from Duels where DuelID=$1::uuid for update;", [this.duelId])).rows[0].duelinfo;
         duelinfo.finishTimes[round_idx] = Date.now();
-        const res = await client.query(`update Duels set DuelInfo=$3::jsonb where DuelID=$1::uuid and jsonb_array_length(DuelInfo->'finishTimes')=$2::int`, [duelId, round_idx, duelinfo]);
+        const res = await this.client.query(`update Duels set DuelInfo=$3::jsonb where DuelID=$1::uuid and jsonb_array_length(DuelInfo->'finishTimes')=$2::int`, [this.duelId, round_idx, duelinfo]);
         if(res.rowCount>0){
 
-            client.query(`select pg_notify($1::text, jsonb_build_object('type','finish_round','info',jsonb_build_object('index',$2::integer,'finish_time',(DuelInfo->'finishTimes'->$2::integer)))::text) from Duels where DuelID=$3::uuid`, [channelId, round_idx, duelId]);
+            this.client.query(`select pg_notify($1::text, jsonb_build_object('type','finish_round','info',jsonb_build_object('index',$2::integer,'finish_time',(DuelInfo->'finishTimes'->$2::integer)))::text) from Duels where DuelID=$3::uuid`, [this.channelId, round_idx, this.duelId]);
         }
         else{
-            send_current_state();
+            this.send_current_state();
         }
-        return client.query("commit;");
-    }  
-
-    client.on("notification", (msg)=>{
-        const payload = JSON.parse(msg.payload);
-        const {type,info} = payload;
-        if(type=="new_round"){
-            duel.locations[info.index] = info.location;
-            duel.startTimes[info.index] = info.start_time;
-            duel.health_before[info.index] = info.health_before;
-            duel.guesses[info.index] ??= {};
-        }
-        else if(type=="finish_round"){
-            duel.finishTimes[info.index] = info.finish_time;
-        }
-        else if(type=="update_guess"){
-            const {round, user, guess} = info;
-            duel.guesses[round][user] = guess;
-            //If all players that are on a team that has not been eliminated have made a final guess finish the round early
-            const active_teams = Object.keys(duel.rules.teams).filter(t=>duel.health_before[round][t]>0)
-            if(active_teams.flatMap(t=>duel.rules.teams[t]).map((u)=>duel.guesses[round][u]?.final).reduce((a,b)=>a&&b, true)){
-                finish_round(round);
-                return;
-            }
-        }
-        else if(type=="new_duel"){
-            ws.send(JSON.stringify({
-                type:"new_duel",
-                new_id:info
-            }));
-            return;
-        }
-        send_current_state();
-    });
-
-    const channelId = `duel_${duelId}`
-    if(!/^[A-Za-z0-9-_]+$/.test(channelId)){
-        return;
+        return this.client.query("commit;");
     }
-    client.query(`listen "${channelId}"`);
-
-    const add_new_round = async (round_idx) =>{
+    async add_new_round(round_idx){
         //Check if the game has already ended
-        client.query("begin;");
-        const duelinfo = (await client.query("select Duels.DuelInfo from Duels where DuelID=$1::uuid for update;", [duelId])).rows[0].duelinfo;
+        this.client.query("begin;");
+        const duelinfo = (await this.client.query("select Duels.DuelInfo from Duels where DuelID=$1::uuid for update;", [this.duelId])).rows[0].duelinfo;
         if(round_idx==0){
             duelinfo.health_before[round_idx] = {};
-            for(const teamname of Object.keys(duel.rules.teams)){
-                duelinfo.health_before[round_idx][teamname] = duel.rules.max_health;
+            for(const teamname of Object.keys(this.duel.rules.teams)){
+                duelinfo.health_before[round_idx][teamname] = this.duel.rules.max_health;
             }
 
         }
@@ -1009,16 +1034,16 @@ app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
             const max_score = Object.values(last_round_guesses).reduce((acc,curr)=>Math.max(acc,curr.score),0);
             const last_round_health = duelinfo.health_before[round_idx-1];
             for(const team in last_round_health){
-                const team_guesses = duel.rules.teams[team].map(player=>last_round_guesses[player]);
+                const team_guesses = this.duel.rules.teams[team].map(player=>last_round_guesses[player]);
                 const max_score_team = team_guesses.reduce((acc,curr)=>Math.max(acc,(curr?.score ?? 0)),0);
-                const multiplier = get_multiplier(round_idx-1);
+                const multiplier = this.get_multiplier(round_idx-1);
                 const damage = Math.floor((max_score-max_score_team)*multiplier);
                 const new_health = Math.max(0,last_round_health[team]-damage);
                 duelinfo.health_before[round_idx][team] = new_health;
             }
         }
         if(Object.values(duelinfo.health_before[round_idx]).reduce((acc,curr)=>acc+(curr>0), 0)>1){
-            const map = await MapFile.open(duelrow.mapid);
+            const map = await MapFile.open(this.duelrow.mapid);
             const location = await map.random_loc();
             map.close();
             duelinfo.locations[round_idx] = location;
@@ -1029,40 +1054,40 @@ app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
         }
         duelinfo.guesses[round_idx] = {};
         duelinfo.startTimes[round_idx] = Date.now();
-        const res = await client.query(`update Duels set DuelInfo=$3::jsonb where DuelID=$1::uuid and jsonb_array_length(DuelInfo->'locations')=$2::int`, [duelId, round_idx, duelinfo]);
+        const res = await this.client.query(`update Duels set DuelInfo=$3::jsonb where DuelID=$1::uuid and jsonb_array_length(DuelInfo->'locations')=$2::int`, [this.duelId, round_idx, duelinfo]);
 
         if(res.rowCount>0){
 
-            client.query(`select pg_notify($1::text, jsonb_build_object('type','new_round','info',jsonb_build_object('index',$2::integer,'location',(DuelInfo->'locations'->$2::integer),'start_time',(DuelInfo->'startTimes'->$2::integer),'health_before',(DuelInfo->'health_before'->$2::integer)))::text) from Duels where DuelID=$3::uuid`, [channelId, round_idx, duelId]);
+            this.client.query(`select pg_notify($1::text, jsonb_build_object('type','new_round','info',jsonb_build_object('index',$2::integer,'location',(DuelInfo->'locations'->$2::integer),'start_time',(DuelInfo->'startTimes'->$2::integer),'health_before',(DuelInfo->'health_before'->$2::integer)))::text) from Duels where DuelID=$3::uuid`, [this.channelId, round_idx, this.duelId]);
         }
         else{
-            send_current_state();
+            this.send_current_state();
         }
-        return client.query("commit;");
-    }  
-    const check_time_limit = async ()=>{
-        if(check_duel_finished(duel)){
+        return this.client.query("commit;");
+    }
+    async check_time_limit(){
+        if(this.check_duel_finished(this.duel)){
             return false;
         }
         const now = Date.now();
-        const {time_limit, time_limit_after_guess} = duel.rules;
+        const {time_limit, time_limit_after_guess} = this.duel.rules;
         let current_round = -1;
-        while(duel.startTimes[current_round+1]){
+        while(this.duel.startTimes[current_round+1]){
             current_round++;
         }
         if(current_round==-1){
-            await add_new_round(current_round+1);
+            await this.add_new_round(current_round+1);
             return true;
         }
-        else if(duel.finishTimes[current_round]){
+        else if(this.duel.finishTimes[current_round]){
             //12 seconds time for viewing round results
-            if(now-duel.finishTimes[current_round]>12000){
-                await add_new_round(current_round+1);
+            if(now-this.duel.finishTimes[current_round]>12000){
+                await this.add_new_round(current_round+1);
                 return true;
             }
         }
         else{
-            const lock_in_time = Object.values(duel.guesses[current_round]).reduce((acc,curr)=>{
+            const lock_in_time = Object.values(this.duel.guesses[current_round]).reduce((acc,curr)=>{
                 if(!acc){
                     return curr.final;
                 }
@@ -1071,78 +1096,63 @@ app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
                 }
                 return Math.min(acc,curr.final)
             }, false);
-            let time_left = (duel.rules.time_limit || Infinity)-(now-duel.startTimes[current_round]);
+            let time_left = (this.duel.rules.time_limit || Infinity)-(now-this.duel.startTimes[current_round]);
             if(lock_in_time){
                 time_left = Math.min(time_left,
-                    (duel.rules.time_limit_after_guess || Infinity)-(now-lock_in_time)
+                    (this.duel.rules.time_limit_after_guess || Infinity)-(now-lock_in_time)
                 );
             }
             if(time_left<0){
-                await finish_round(current_round);
+                await this.finish_round(current_round);
                 return true;
             }
         }
-    };
-    const update_guess = async (location, round, final) =>{
-        if(duel.finishTimes[round]){
-            ws.send(JSON.stringify({
+    }
+    async update_guess(location, round, final){ 
+        if(this.duel.finishTimes[round]){
+            this.ws.send(JSON.stringify({
                 type:"error",
                 message:`Round ${round+1} is already finished.`
             }));
             return;
         }
+        if(!this.duel.locations[round]){
+            this.ws.send(JSON.stringify({
+                type:"error",
+                message:`Round ${round+1} hasn't started yet.`,
+            })
+        }
         location = {lat:location.lat,lng:location.lng};
-        const result = process_guess(location, duel.locations[round]);
+        const result = this.process_guess(location, this.duel.locations[round]);
         result.final = final && Date.now();
-        const username = req.session.passport.user.username;
-        client.query('begin');
-        client.query('select 67 from Duels where DuelID=$1::uuid for update;',[duelId]);
-        const res = await client.query(`
+        this.client.query('begin');
+        this.client.query('select 67 from Duels where DuelID=$1::uuid for update;',[this.duelId]);
+        const res = await this.client.query(`
             update Duels set DuelInfo=jsonb_set(DuelInfo, ARRAY['guesses', $3::text, $2::text], $4::jsonb, true) where DuelID=$1::uuid and 
             jsonb_typeof(DuelInfo->'guesses'->$3::integer->$2::text->'final') is distinct from 'number';
-        `,[duelId, username, round, result]);
+        `,[this.duelId, this.username, round, result]);
         if(res.rowCount>0){
-            client.query(`select pg_notify($2::text, jsonb_build_object('type','update_guess','info',jsonb_build_object('round',$3::integer,'user',$4::text,'guess',(DuelInfo->'guesses'->$3::integer->$4::text)))::text) from Duels where DuelID=$1::uuid;`,[duelId, channelId, round, username]);
+            this.client.query(`select pg_notify($2::text, jsonb_build_object('type','update_guess','info',jsonb_build_object('round',$3::integer,'user',$4::text,'guess',(DuelInfo->'guesses'->$3::integer->$4::text)))::text) from Duels where DuelID=$1::uuid;`,[this.duelId, this.channelId, round, this.username]);
         }
         else{
-            send_current_state();
+            this.send_current_state();
         }
-        return client.query("commit;");
-    };
-
-    ws.send(JSON.stringify({
-        type:"game_info",
-        you:req.session.passport.user.username,
-        owner:duelrow.ownername,
-        rules:duel.rules,
-        mapname:duelrow.mapname,
-        mapid:duelrow.mapid
-    }));
-    (await check_time_limit()) || (send_current_state());
-    client.query("commit;");
-    const your_team = Object.keys(duel.rules.teams).filter(t=>duel.rules.teams[t].includes(req.session.passport.user.username))[0];
-    ws.on("message", async (msg)=>{
-        if(await check_time_limit()){
-            return;
-        }
-        let data_;
-        try{
-            data_ = JSON.parse(msg);
-        }
-        catch (error){
-            return;
-        }
-        const data = data_;
-        //Players/teams that have been eliminated cant make guesses
-        if(duel.health_before[duel.health_before.length-1][your_team]>0){
-            if(data.type == "update_guess"){
-                update_guess(data.location, data.round, false);
-            }
-            else if(data.type == "confirm_guess"){
-                update_guess(data.location, data.round, true);
-            }
-        }
-    });
+        return this.client.query("commit;");
+    }
+    check_duel_finished(duel){
+        return check_duel_finished(duel)
+    }
+}
+app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
+    if(!await check_req_duel_id(req)){
+        ws.close(3001, "Not authenticated");
+        return
+    }
+    const duelId = req.params.id;
+    const username = req?.session?.passport?.user?.username;
+    const handler = new DuelSessionHandler();
+    if(!await handler.initialize(ws, duelId, username)){
+    }
 }));
 
 app.get("/duelagain/:id", require_auth, async (req,res) => {

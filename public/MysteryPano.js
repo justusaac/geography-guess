@@ -26,7 +26,7 @@ class MysteryPano{
 			}
 		});
 		this.socket.addEventListener("message", msg => {
-			console.log(msg.data)
+			//console.log(msg.data)
 			const data = JSON.parse(msg.data);
 			({
 				round:()=>{

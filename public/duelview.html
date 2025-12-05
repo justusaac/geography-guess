@@ -304,12 +304,13 @@
 				const tables = [];
 				for(const elem of this.root.getElementsByClassName("round-results-message")){
 					elem.innerHTML = '';
-					const your_score = team_best_guesses[you_team]?.score || 0;
+					const your_team_score = team_best_guesses[you_team]?.score || 0;
+					const your_score = round_data.guesses[this.game_info.you]?.score || 0;
 					const span = document.createElement('span');
 					span.innerHTML = 
 					(round_data.health_before[you_team]==0) ? "You are spectating."
-					: (your_score == max_score) ? `${your_score} points, you win this round!` 
-					: `You lost ${max_score-your_score}${damage_multiplier==1 ? '' : ` * ${damage_multiplier} = ${Math.floor((max_score-your_score)*damage_multiplier)}`} health.`
+					: (your_team_score == max_score) ? `${your_team_score} points, ${your_score==your_team_score ? "you win" : "your team wins"} this round!` 
+					: `You lost ${max_score-your_team_score}${damage_multiplier==1 ? '' : ` * ${damage_multiplier} = ${Math.floor((max_score-your_team_score)*damage_multiplier)}`} health.`
 					elem.appendChild(span);
 					elem.appendChild(document.createElement("br"));
 					const table = document.createElement("table");
@@ -355,11 +356,12 @@
 								team_td.textContent = team;
 								team_td.rowSpan = sorted_users.length;
 								team_td.style.color = MysteryPano.get_color_from_string(team);
-								team_td.style.wordBreak = "break-all"
+								team_td.style.wordBreak = "break-word"
 								tr.appendChild(team_td);
 							}
 							const username_td = document.createElement('td');
 							username_td.textContent = user;
+							username_td.style.wordBreak = "break-word"
 							if(user==this.game_info.you){
 								username_td.classList.add('highlighted');
 							}
