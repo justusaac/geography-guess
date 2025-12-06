@@ -1120,7 +1120,7 @@ class DuelSessionHandler{
             this.ws.send(JSON.stringify({
                 type:"error",
                 message:`Round ${round+1} hasn't started yet.`,
-            })
+            }))
         }
         location = {lat:location.lat,lng:location.lng};
         const result = this.process_guess(location, this.duel.locations[round]);
