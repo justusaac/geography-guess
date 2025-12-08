@@ -13,7 +13,8 @@
     		width:7em;
     		--max-health:10000;
     		--current-health:67;
-    		counter-reset: maxhealth var(--max-health) currenthealth max(var(--current-health), 0);
+    		--min-health:0;
+    		counter-reset: maxhealth var(--max-health) currenthealth round(max(var(--current-health), var(--min-health)));
     		--health-bg-color:hsl(min(calc(var(--current-health) / var(--max-health) * 200deg), 120deg) 100% 40%);
     		background: linear-gradient( to right, var(--health-bg-color) 0%, var(--health-bg-color) calc(var(--current-health) / var(--max-health) * 100%), rgba(0,0,0,0.6) calc(var(--current-health) / var(--max-health) * 100%)) ;
     		border: 1px solid #959595;
@@ -24,13 +25,16 @@
     			color:white;
     		}
     	}
+    	.negative-available{
+    		--min-health:var(--current-health);
+    	}
     	@property --max-health{
 			syntax:"<integer>";
 			inherits:true;
 			initial-value:0;
 		}
     	@property --current-health{
-			syntax:"<integer>";
+			syntax:"<number>";
 			inherits:true;
 			initial-value:0;
 		}
@@ -129,6 +133,7 @@
 	</div>
 	<script src="/MysteryPano.js"></script>
 	<script>
+		'use strict';
 		class DuelPano extends MysteryPano {
 			constructor(rootElem, socketURL){
 				super(rootElem, socketURL);
@@ -139,6 +144,11 @@
 						const {new_id} = data;
 						const new_href = window.location.origin+"/duelroom/"+new_id
 						window.location.href = new_href;
+					}
+					if(data.type=="game_info"){
+						this.calculate_round_results = data.rules.pinpointing 
+							? this.calculate_round_results_pinpointing 
+							: this.calculate_round_results_normal
 					}
 				})
 			}
@@ -168,6 +178,9 @@
 							const td_health = document.createElement('td');
 							const health_bar = document.createElement('span');
 							health_bar.classList.add("health-bar","notransition");
+							if(this.game_info.rules.pinpointing){
+								health_bar.classList.add("negative-available");
+							}
 							health_bar.style.setProperty("--max-health", max_health);
 							health_bar.style.setProperty("--current-health", health);
 							td_health.appendChild(health_bar);
@@ -175,7 +188,7 @@
 							elem.appendChild(tr)
 						}
 					}
-					if(round_data.health_before[you_team]<=0){
+					if(round_data.health_before[you_team]<=0 && !this.game_info.rules.pinpointing){
 						google.maps.event.clearListeners(this.map, "click");
 						for(const elem of this.root.getElementsByClassName("lock-in-button")){
 							elem.disabled = true;
@@ -263,6 +276,95 @@
 		        //scaling factor to dodge floating point errors
 		        return 1+((step*100)*((round_idx+1)-(first_round-1)))/100;
 		    }
+		    calculate_round_results_normal(health_before, guesses, multiplier){
+		    	const new_health = {};
+		    	const delta_messages = {};
+	            const max_score = Object.values(guesses).reduce((acc,curr)=>Math.max(acc,curr.score),0);
+	            const you_team = Object.keys(this.game_info.rules.teams).filter(t=>this.game_info.rules.teams[t].includes(this.game_info.you))[0];
+	            let your_team_score = 0;
+	            for(const team in health_before){
+	                const team_guesses = this.game_info.rules.teams[team].map(player=>guesses[player]);
+	                const max_score_team = team_guesses.reduce((acc,curr)=>Math.max(acc,(curr?.score ?? 0)),0);
+	                if(team==you_team){
+	                	your_team_score = max_score_team;
+	                }
+	                const damage = Math.floor((max_score-max_score_team)*multiplier);
+	                new_health[team] = health_before[team]-damage;
+	                delta_messages[team] = `<span style="color:${(health_before[team]<=0) ? "rgba(0,0,0,0)" : damage>0 ? "red" : "green"}">${-damage}</span>`
+	            }
+				const your_score = guesses[this.game_info.you]?.score || 0;
+				const summary_message = 
+					(health_before[you_team]==0) ? "You are spectating."
+					: (your_team_score == max_score) ? `${your_team_score} points, ${your_score==your_team_score ? "you win" : "your team wins"} this round!` 
+					: `You lost ${max_score-your_team_score}${multiplier==1 ? '' : ` * ${multiplier} = ${Math.floor((max_score-your_team_score)*multiplier)}`} health.`;
+		        return {new_health,delta_messages,summary_message};
+		    }
+		    calculate_round_results_pinpointing(health_before, guesses){
+
+	            const you_team = Object.keys(this.game_info.rules.teams).filter(t=>this.game_info.rules.teams[t].includes(this.game_info.you))[0];
+		    	const new_health = {...health_before};
+		    	const delta_messages = Object.fromEntries(Object.keys(health_before).map(x=>[x,'']));
+		    	let first_lock = null;
+		        let first_lock_player = null;
+		        //Important to consistently sort because of extremely rare case of multiple guesses on the same timestamp
+		        const guess_order = Object.keys(guesses).sort();
+		        for(const player of guess_order){
+		            const guess = guesses[player];
+		            if(typeof guess.final == "number" && (first_lock==null || guess.final<first_lock.final)){
+		                first_lock = guess;
+		                first_lock_player = player;
+		            }
+		        }
+		        //+1 or -1 point for first guesser based on if it's a 5k or not
+		        if(first_lock!=null){
+		            const first_lock_team = Object.keys(health_before).filter(teamname=>this.game_info.rules.teams[teamname].includes(first_lock_player))[0];
+		            if(first_lock.score==5000){
+		                new_health[first_lock_team]++;
+		                delta_messages[first_lock_team] += "+1: First pinpoint";
+		            }
+		            else{
+		                new_health[first_lock_team]--;
+		                delta_messages[first_lock_team] += "-1: First w/o 5k";
+		            }
+		        }
+		        //1 point for closest guess without a tie between different teams
+		        let best_score = -1;
+		        let best_score_team = null;
+		        for(const team in health_before){
+		            const team_guesses = this.game_info.rules.teams[team].map(player=>guesses[player]);
+		            const max_score_team = team_guesses.reduce((acc,curr)=>Math.max(acc,(curr?.score ?? 0)),0);
+		            if(max_score_team>best_score){
+		                best_score = max_score_team;
+		                best_score_team = team;
+		            }
+		            else if(max_score_team==best_score){
+		                best_score_team = null;
+		            }
+		        }
+		        if(best_score_team!=null){
+		            new_health[best_score_team]++;
+		            if(delta_messages[best_score_team]){
+		            	delta_messages[best_score_team] += "<br>"
+		          	}
+		            delta_messages[best_score_team] += "+1: Closest guess"
+		        }
+		        for(const team in delta_messages){
+		        	const delta = new_health[team]-health_before[team];
+		        	delta_messages[team] = `<span style="color:${delta>0 ? "green" : "red"}">${delta_messages[team] || "&plusmn;0"}</span>`
+		        }
+		        const your_delta = new_health[you_team]-health_before[you_team];
+		        const s = Math.abs(your_delta)!=1?"s":'';
+		        const summary_message = 
+        			(your_delta > 0)
+        			? `You gained ${your_delta} point${s}!`
+        			: (your_delta==0)
+        			? "You didn't get any points."
+        			: `You lost ${-your_delta} point${s}.`;
+		        return {new_health, delta_messages, summary_message};
+		    }
+		    calculate_round_results(...args){
+		    	return this.calculate_round_results_normal(...args);
+		    }
 			show_round_results(round_data){
 				this.pano?.setPano("NOPANO");
 				const curr_msg = {round:round_data.round, type:"round_results"};
@@ -273,44 +375,15 @@
 				}
 				this.show_movement_history();
 
-				const max_score = Math.max(0, ...Object.values(round_data.guesses).map(x=>x.score));
 				const you_team = Object.keys(this.game_info.rules.teams).filter(t=>this.game_info.rules.teams[t].includes(this.game_info.you))[0];
 				const damage_multiplier = this.get_multiplier(round_data.round);
-				const team_guesses = {};
-				for(const team in this.game_info.rules.teams){
-					const guesses = []
-					for(const player of this.game_info.rules.teams[team]){
-						if(round_data.guesses[player]){
-							guesses.push(round_data.guesses[player]);
-						}
-					}
-					team_guesses[team] = guesses;
-				}
-				const team_best_guesses = {}
-				for(const team in team_guesses){
-					team_best_guesses[team] = team_guesses[team].reduce((acc,curr)=>{
-						if(!acc){
-							return curr;
-						}
-						if(!curr){
-							return acc;
-						}
-						if(acc.score>curr.score){
-							return acc;
-						}
-						return curr;
-					},null)
-				}
+				const {new_health, delta_messages, summary_message} = this.calculate_round_results(round_data.health_before, round_data.guesses, damage_multiplier);
+
 				const tables = [];
 				for(const elem of this.root.getElementsByClassName("round-results-message")){
 					elem.innerHTML = '';
-					const your_team_score = team_best_guesses[you_team]?.score || 0;
-					const your_score = round_data.guesses[this.game_info.you]?.score || 0;
 					const span = document.createElement('span');
-					span.innerHTML = 
-					(round_data.health_before[you_team]==0) ? "You are spectating."
-					: (your_team_score == max_score) ? `${your_team_score} points, ${your_score==your_team_score ? "you win" : "your team wins"} this round!` 
-					: `You lost ${max_score-your_team_score}${damage_multiplier==1 ? '' : ` * ${damage_multiplier} = ${Math.floor((max_score-your_team_score)*damage_multiplier)}`} health.`
+					span.innerHTML = summary_message;
 					elem.appendChild(span);
 					elem.appendChild(document.createElement("br"));
 					const table = document.createElement("table");
@@ -343,12 +416,9 @@
 							}
 						}
 						for(const table of tables){
-
 							const health_before = round_data.health_before[team];
 							const max_health = this.game_info.rules.max_health;
-							const uncapped_damage = Math.floor((max_score-(team_best_guesses[team]?.score || 0))*damage_multiplier)
-							const damage = Math.min(uncapped_damage, health_before);
-							const health_after = health_before - damage;
+							const health_after = new_health[team];
 							const tr = document.createElement('tr');
 							table.appendChild(tr);
 							if(i==0 && is_team_game){
@@ -372,7 +442,7 @@
 							if(i==0){
 								const delta_td = document.createElement("td");
 								delta_td.rowSpan = sorted_users.length;
-								delta_td.innerHTML = `<span style="color:${(health_before<=0) ? "rgba(0,0,0,0)" : damage>0 ? "red" : "green"}">${-damage}</span>`
+								delta_td.innerHTML = delta_messages[team]
 								tr.appendChild(delta_td);
 								const health_td = document.createElement('td');
 								health_td.rowSpan = sorted_users.length;
@@ -380,11 +450,14 @@
 								const health_bar = document.createElement('span');
 								health_td.appendChild(health_bar);
 								health_bar.classList.add("health-bar","notransition");
+								if(this.game_info.rules.pinpointing){
+									health_bar.classList.add("negative-available");
+								}
 								health_bar.style.setProperty("--max-health", max_health);
 								health_bar.style.setProperty("--current-health", health_before);
 								health_bar.offsetHeight;
 								health_bar.classList.remove("notransition");
-								health_bar.style.setProperty("--current-health", health_before-uncapped_damage);
+								health_bar.style.setProperty("--current-health", health_after);
 							}
 						}
 					}
@@ -427,6 +500,15 @@
 						header.appendChild(th);
 					}
 					table.appendChild(header);
+
+					const statusmsg = document.createElement("span");
+					const ending_health = game_info.health_before[game_info.health_before.length-1]
+					statusmsg.style.fontSize = "1.5em";
+					statusmsg.innerHTML = 
+						ending_health[you_team]>=(this.game_info.rules.pinpointing ? this.game_info.rules.pinpointing_target : 0)
+							? "Victory! You won." 
+							: "Defeat! You lost.";
+					base.prepend(statusmsg, document.createElement("br"));
 					for(let i=0; i<game_info.health_before.length-1; i++){
 						const row = document.createElement('tr');
 						const roundno = document.createElement('td');
@@ -521,14 +603,19 @@
 							else if(i+1==game_info.health_before.length-1){
 								td.classList.add("green-highlight")
 								show_round_on_map();
-								const statusmsg = document.createElement("span");
-								statusmsg.style.fontSize = "1.5em";
-								statusmsg.innerHTML = (this.game_info.rules.teams[team].includes(this.game_info.you)) ? "Victory! You won." : "Defeat! You lost."
-								base.prepend(statusmsg, document.createElement("br"));
+							}
+							let delta_message = `<span style="color:${(health_before<=0) ? "rgba(0,0,0,0)" : delta<0 ? "red" : "green"}">${delta>0?"+":''}${delta}</span>`
+							if(this.game_info.rules.pinpointing){
+								td.classList.remove("red-highlight");
+								td.classList.remove("green-highlight");
+								if(i+1==game_info.health_before.length-1){
+									td.classList.add(health_after >= this.game_info.rules.pinpointing_target ? "green-highlight" : "red-highlight");
+								}
+								delta_message = `<span style="color:${delta<0 ? "red" : delta>0 ? "green" : "gray"}">${delta>0?"+":''}${delta}</span>`
 							}
 							td.innerHTML = `
 								<span>
-									<span style="color:${(health_before<=0) ? "rgba(0,0,0,0)" : delta<0 ? "red" : "green"}">${delta}</span>
+									${delta_message}
 									<br>
 									<span style="font-size:1.2em">${health_after}</span>
 								</span>								

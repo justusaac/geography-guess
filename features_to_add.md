@@ -7,3 +7,4 @@
 - Add full setup script for .env file and db initialization
 - sizzling css
 - Co op mode
+- pjax to reduce api costs

@@ -51,9 +51,10 @@
 		.main-content{
 			width:auto;
 			display:block;
-			background:linear-gradient(to right in hsl, rgba(0,130,0,0.15), rgba(0,0,200,0.15));
+			background:linear-gradient(to right in hsl, rgba(50,215,50,0.3), rgba(0,0,100,0.3));
 		}
 		.error-message{
+			display:block;
 			width:auto;
 			min-width:unset;
 			max-width:unset;
@@ -71,8 +72,11 @@
 		.maplink{
 			color:revert;
 		}
-		.multipliers-adjustment{
+		.multipliers-adjustment, .pinpointing-adjustment{
 			margin:0;
+		}
+		.hidden{
+			display:none;
 		}
 	</style>
 	<script>
@@ -151,7 +155,7 @@
 				elem.checked = multipliers_enabled;
 			}
 			for(const elem of document.getElementsByClassName("multipliers-adjustment")){
-				elem.style.display = multipliers_enabled ? "revert" : "none";
+				elem.classList[multipliers_enabled ? "remove" : "add"]("hidden")
 			}
 			if(multipliers_enabled){
 
@@ -160,6 +164,20 @@
 				}
 				for(const elem of document.getElementsByName("multipliers_start")){
 					elem.value = rules.first_multiplier_round;
+				}
+			}
+			for(const elem of document.getElementsByName("pinpointing")){
+				elem.checked = rules.pinpointing;
+			}
+			for(const elem of document.getElementsByClassName("pinpointing-adjustment")){
+				elem.classList[rules.pinpointing ? "remove" : "add"]("hidden")
+			}
+			for(const elem of document.getElementsByName("pinpointing_target")){
+				elem.value = rules.pinpointing_target;
+			}
+			for(const selector of ['.multipliers-stuff', 'label[for="max-health-input"]']){
+				for(const elem of document.querySelectorAll(selector)){
+					elem.classList[rules.pinpointing ? "add" : "remove"]("hidden")
 				}
 			}
 		}
@@ -270,7 +288,7 @@
 			
 			for(const btn of document.getElementsByClassName("start-button")){
 				btn.disabled = (owner != "<%= username %>" || users.length<2);
-				btn.style.display = (owner != "<%= username %>") ? "none" : "revert";
+				btn.classList[owner == "<%= username %>" ? "remove" : "add"]("hidden")
 
 			}
 			for(const tag of ["input","select"]){
@@ -285,7 +303,7 @@
 		}
 		function show_error(err){
 			for(const elem of document.getElementsByClassName("error-message")){
-				elem.style.display = "block";
+				elem.classList.remove("hidden")
 			}
 			for(const elem of document.getElementsByClassName("error-reason")){
 				elem.textContent = err.reason
@@ -301,7 +319,7 @@
 </head>
 <body>
 	<%- include('navheader'); %>
-	<div style="display:none;" class="error-message">
+	<div class="error-message hidden">
 		Disconnected:
 		<span class="error-reason"></span>
 		<br>
@@ -335,14 +353,23 @@
 			<br>
 			<label for="time-limit-after-guess-box">Time Limit after guess <input type="checkbox" name="time_limit_after_guess" id="time-limit-after-guess-box"><input type="number" min="0" max="999" name="time_limit_minutes_after_guess"> min <input type="number" min="0" max="59" name="time_limit_seconds_after_guess"> sec </label>
 			<br>
-			<label for="max-health-input">Starting Health <input type="number" name="max_health" id="max-health-input" step="1000" min="0"></label>
+			<label for="pinpointing-box">Pinpointing mode <input type="checkbox" name="pinpointing" id="pinpointing-box">
+			</label>
 			<br>
-			<label for="multipliers-box">Multipliers <input type="checkbox" name="multipliers" id="multipliers-box">
+			<ul class="pinpointing-adjustment">
+				<li>Play to <input type="number" min="1" max="99" name="pinpointing_target"> points</li>
+			</ul>
+			<label for="max-health-input">Starting Health <input type="number" name="max_health" id="max-health-input" step="1000" min="0"></label>
+			<span class="multipliers-stuff">
+				<br>
+				<label for="multipliers-box">Multipliers <input type="checkbox" name="multipliers" id="multipliers-box">
+				</label>
+				<br>
 				<ul class="multipliers-adjustment">
 					<li><input type="number" min="2" max="999" name="multipliers_start"> First round</li>
 					<li><input type="number" min="0" max="1" step="0.1" name="multipliers_step"> Increase rate</li>
 				</ul>
-			</label>
+			</span>
 			
 		</span>
 		<hr/>
@@ -350,7 +377,6 @@
 			<b>Players</b>
 			<br>
 			<label for="team-box">Teams <input type="checkbox" id="team-box" name="teams"><input type="number" min="2" name="team_count" id="team_count" value="2"></label>
-			<br>
 			<ul class="player-list">
 			</ul>
 		</span>
@@ -432,6 +458,8 @@ window.addEventListener('load', () => {
 		info.public = fd["public"];
 		info.first_multiplier_round = fd["multipliers"] ? (Number(fd["multipliers_start"]) || 5) : null;
 		info.multiplier_increase = fd["multipliers"] ? (Number(fd["multipliers_step"]) || 0.5) : null;
+		info.pinpointing = fd["pinpointing"];
+		info.pinpointing_target = fd["pinpointing_target"];
 		socket.send(JSON.stringify({
 			type:"update_rules",
 			info

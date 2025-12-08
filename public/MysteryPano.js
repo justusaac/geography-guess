@@ -1,3 +1,4 @@
+'use strict';
 class MysteryPano{
 	constructor(rootElem, socketURL){
 		this.root = rootElem;
