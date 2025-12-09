@@ -94,7 +94,7 @@
 	<script>
 		window.onMapsLoad = async ()=>{
 			const gameId = MysteryPano.get_game_id();
-			const url = (window.location.protocol=="https:" ? "wss:" : "ws:")+"//"+window.location.host+"/gamesession/"+gameId;
+			const url = (window.location.protocol=="https:" ? "wss:" : "ws:")+"//"+window.location.host+"/ws/gamesession/"+gameId;
 			new MysteryPano(document.getElementById("game-container"), url);
 		};
 	</script>

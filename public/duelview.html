@@ -644,7 +644,7 @@
 	<script>
 		window.onMapsLoad = async ()=>{
 			const gameId = MysteryPano.get_game_id();
-			const url = (window.location.protocol=="https:" ? "wss:" : "ws:")+"//"+window.location.host+"/duelsession/"+gameId;
+			const url = (window.location.protocol=="https:" ? "wss:" : "ws:")+"//"+window.location.host+"/ws/duelsession/"+gameId;
 			new DuelPano(document.getElementById("game-container"), url);
 		};
 	</script>

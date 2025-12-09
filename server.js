@@ -273,7 +273,7 @@ app.get("/game/:id", require_auth_game_id, (req, res) => {
     res.sendFile(__dirname+'/public/mapview.html');
 });
 
-app.ws("/gamesession/:id", asyncWrapper(async (ws, req) => {
+app.ws("/ws/gamesession/:id", asyncWrapper(async (ws, req) => {
     if(!await check_req_game_id(req)){
         ws.close(3001, "Not authenticated");
         return
@@ -649,7 +649,7 @@ app.get("/duelroom/:id", require_auth, async (req,res)=>{
     const {mapid,mapname} = result.rows[0];
     return res.render("duelroom", with_username({mapname,mapid},req));
 });
-app.ws("/duelroomsession/:id", asyncWrapper(async (ws,req) => {
+app.ws("/ws/duelroomsession/:id", asyncWrapper(async (ws,req) => {
     const duelId = req.params.id;
     const userId = req?.session?.passport?.user?.id;
     if(userId == null){
@@ -1207,7 +1207,7 @@ class PinpointingDuelSessionHandler extends DuelSessionHandler{
     }
 }
 
-app.ws("/duelsession/:id", asyncWrapper(async (ws, req) => {
+app.ws("/ws/duelsession/:id", asyncWrapper(async (ws, req) => {
     if(!await check_req_duel_id(req)){
         ws.close(3001, "Not authenticated");
         return
