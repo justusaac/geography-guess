@@ -650,7 +650,7 @@ app.get("/duelroom/:id", require_auth, async (req,res)=>{
         return res.redirect("/maplist");
     }
     const {mapid,mapname} = result.rows[0];
-    return res.render("duelroom", with_username({mapname,mapid},req));
+    return res.render("duelroom", with_username({mapname,mapid,duelid:req.params.id},req));
 });
 app.ws("/ws/duelroomsession/:id", asyncWrapper(async (ws,req) => {
     const duelId = req.params.id;

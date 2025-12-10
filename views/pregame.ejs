@@ -14,17 +14,11 @@
 			font-size:1.5em;
 		}
 	</style>
-	<script>
-		async function copyLink(){
-			await navigator.clipboard.writeText(document.getElementById("challengelink").textContent);
-			document.getElementById("copybutton").textContent = "Copied"
-		}
-	</script>
 </head>
 <body>
 	<%- include('navheader'); %>
 	<h3>Challenge on map <b><%= mapname %></b></h3>
-	Challenge link: <a id="challengelink" href="/challenge/<%= gameid %>">/challenge/<%= gameid %></a><button id="copybutton" onclick="copyLink()">Copy</button>
+	Challenge link: <%- include('sharelink', {url:"/challenge/"+gameid}); %>
 	<form action="/game/<%= gameid %>">
 		<input type="submit" value="Start game" class="startbutton"/>
 	</form>

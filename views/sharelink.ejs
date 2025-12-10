@@ -1,0 +1,30 @@
+<script defer src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs@0.0.2/qrcode.min.js"></script>
+<% const componentID = `sharelink-${Math.random().toString(36).slice(2)}` %>
+<% const QRcodesize = 300 %>
+<a id="anchor-<%= componentID %>" href="<%= url %>"><%= url %></a>
+<button id="copybutton-<%= componentID %>" onclick="
+	navigator.clipboard.writeText(document.getElementById('anchor-<%= componentID %>').textContent).then(()=>event.target.textContent = 'Copied!')
+">Copy</button>
+<button id="qrpopupbutton-<%= componentID %>" >QR code</button>
+<dialog id="qrdialog-<%= componentID %>" onclick="document.getElementById('qrdialog-<%= componentID %>').close()">
+	<div id="qrcontainer-<%= componentID %>" style="width:<%= QRcodesize %>px;height:<%= QRcodesize %>px;background-color:red">
+	</div>
+</dialog>
+<script>
+	window.addEventListener("load",()=>{
+		const elem = document.getElementById("anchor-<%= componentID %>");
+		elem.innerHTML = (new URL('<%= url %>', window.location.origin)).href
+	})
+	document.addEventListener("DOMContentLoaded",()=>{
+		document.getElementById("qrpopupbutton-<%= componentID %>").addEventListener('click',()=>{
+			const target = document.getElementById("qrcontainer-<%= componentID %>");
+				target.innerHTML = ''
+			const qrcode = new QRCode(target, {
+				text:(new URL('<%= url %>', window.location.origin)).href,
+				height:<%= QRcodesize %>,
+				width:<%= QRcodesize %>,
+			})
+			document.getElementById('qrdialog-<%= componentID %>').showModal()
+		})
+	});
+</script>

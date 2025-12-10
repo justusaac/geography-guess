@@ -310,12 +310,6 @@
 				elem.textContent = err.reason
 			}
 		}
-		async function copyLink(){
-			await navigator.clipboard.writeText(document.getElementById("challengelink").textContent);
-			for(const btn of document.getElementsByClassName("copybutton")){
-				btn.textContent = "Copied"
-			}
-		}
 	</script>
 </head>
 <body>
@@ -327,7 +321,7 @@
 		(try reloading)
 	</div>
 	<br>
-	Join link: <a id="challengelink" href="erm">erm</a> <button class="copybutton" onclick="copyLink()">Copy</button>
+	Join link: <%- include('sharelink', {url:"/duelroom/"+duelid}); %>
 	<br>
 	<br>
 	Map: <a class="maplink" href="/creategame/<%=mapid%>"><b><%= mapname %></b></a>
@@ -471,10 +465,6 @@ window.addEventListener('load', () => {
 			socket.send(JSON.stringify({type:"start_duel"}));
 		});
 	}
-
-	const elem = document.getElementById("challengelink");
-	elem.textContent = window.location.href;
-	elem.href = elem.textContent;
 
 	const noti = document.getElementById("notification-check")
 	noti.addEventListener("change", (e)=>{
