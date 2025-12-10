@@ -14,3 +14,20 @@ body{
 hr{
 	color:var(--main-foreground-color);
 }
+.fake-button{
+	display:inline-block;
+	margin:5px;
+	padding:5px;
+	font-size:1em;
+	text-decoration:none;
+	color:black;
+	box-sizing:border-box;
+	/* the colors are just color picked straight from firefox */
+	background-color:#E9E9ED;
+	border:1px solid #8F8F9D;
+	&:hover{
+		background-color: #D0D0D7;
+		border-color:#676774;
+	}
+	border-radius:5px;
+}

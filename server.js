@@ -1,5 +1,8 @@
 "use strict";
-require('dotenv').config({path:__dirname+"/.env"});
+const dotenv = require('dotenv')
+const refresh_dotenv = ()=>dotenv.config({path:__dirname+"/.env"});
+refresh_dotenv();
+setInterval(refresh_dotenv, 1000*60*30);
 
 const http = require('http')
 const express = require('express')

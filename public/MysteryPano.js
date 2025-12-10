@@ -139,6 +139,7 @@ class MysteryPano{
 		}
 		this.clear_map();
 		google.maps.event.clearListeners(this.map, "click");
+		this.map?.classList?.remove('expanded')
 	}
 	add_to_map(item){
 		if(!Object.is(item.getMap ? item.getMap() : item.map, this.map)){
@@ -707,9 +708,9 @@ class MysteryPano{
 				base.appendChild(document.createElement('br'));
 			}
 
-			add_text_to_fragment(`<button class="game-results-button"><a href="/creategame/${this.game_info.mapid}">Exit</a></button>`, base);
+			add_text_to_fragment(`<a class="fake-button" href="/creategame/${this.game_info.mapid}">Exit</a>`, base);
 
-			add_text_to_fragment(`<button class="game-results-button"><a href="/playagain/${MysteryPano.get_game_id()}">Play again</a></button>`, base);
+			add_text_to_fragment(`<a class="fake-button" href="/playagain/${MysteryPano.get_game_id()}">Play again</a>`, base);
 
 			container.replaceChildren(base);
 		}

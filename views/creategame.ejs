@@ -32,18 +32,6 @@
 		label{
 			user-select:none;
 		}
-		.fake-btn{
-			font-family:sans-serif;
-			background-color: var(--secondary-background-color);
-            border: 1px solid var(--main-foreground-color);
-            border-radius:5px;
-            color:var(--main-foreground-color);
-            padding:3px;
-            text-decoration:none;
-            &:hover{
-            	filter:brightness(80%);
-            }
-		}
 	</style>
 	<script>
 		function setTimeInputActive(event){
@@ -79,8 +67,7 @@
 			<input type="checkbox" name="challenge" id="challenge-box"><label for="challenge-box">Challenge others</label>
 		</div>
 	</form>
-	<br/>
-	<a href="/createduel/<%= mapid %>" class="fake-btn">Duel in <%= mapname %></a>
+	<a href="/createduel/<%= mapid %>" class="fake-button">Duel in <%= mapname %></a>
 	<script>
 		window.addEventListener('load', () => {
 			setTimeInputActive({target:document.getElementsByName("time_limit")[0]})

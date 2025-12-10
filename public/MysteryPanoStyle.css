@@ -8,6 +8,7 @@ html,body{
 #game-container{
 	width:100%;
 	height:100%;
+	touch-action:pan-x pan-y;
 }
 .pano-container{
 	display:flex;
@@ -179,15 +180,7 @@ html,body{
 	padding:5px;
 	border-collapse:collapse;
 }
-.game-results-button{
-	margin:5px;
-	font-size:1em;
-	a{
-		padding:5px;
-		text-decoration:none;
-		color:black;
-	}
-}
+
 .round-timer{
 	font-family:monospace;
 	position:absolute;
@@ -248,6 +241,7 @@ html,body{
 	&:hover{
 		background:rgba(0,0,0,0.1);
 	}
+	height:min-content;
 }
 .movement-btn{
 	display:block;

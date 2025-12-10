@@ -105,6 +105,11 @@
 				${formatTime(duel.rules.time_limit)}/${formatTime(Math.min(duel.rules.time_limit||Infinity,duel.rules.time_limit_after_guess||Infinity))} 
 				time limit`))
 			ul.appendChild(time_li);
+			if(duel.rules.pinpointing){
+				const pinpointing_li = document.createElement("li");
+				pinpointing_li.appendChild(document.createTextNode(`Pinpointing mode`));
+				ul.appendChild(pinpointing_li);
+			}
 			a.appendChild(ul);
 			return a;
 		}
