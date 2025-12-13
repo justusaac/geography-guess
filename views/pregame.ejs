@@ -19,14 +19,6 @@
 	<%- include('navheader'); %>
 	<h3>Challenge on map <b><%= mapname %></b></h3>
 	Challenge link: <%- include('sharelink', {url:"/challenge/"+gameid}); %>
-	<form action="/game/<%= gameid %>">
-		<input type="submit" value="Start game" class="startbutton"/>
-	</form>
-	<script>
-		window.addEventListener('load', () => {
-			const elem = document.getElementById("challengelink");
-			elem.textContent = window.location.origin + elem.textContent;
-		})
-	</script>
-</body>
+	<br>
+	<a href="/game/<%= gameid %>" class="fake-button startbutton">Start game</a>
 </html>

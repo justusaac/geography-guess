@@ -52,6 +52,7 @@ window.addEventListener('load', () => {
 	document.getElementById("maps_api_key_save").addEventListener("click", save_key);
 	document.getElementById("maps_api_key_clear").addEventListener("click", ()=>{
 		maps_api_key_input.value = ""
+		save_key()
 	});
 
 })

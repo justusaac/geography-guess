@@ -32,6 +32,15 @@
 		label{
 			user-select:none;
 		}
+		main{
+			width:fit-content;
+			text-align:center;
+			margin:auto;
+			& > *{
+				text-align:initial;
+				display:inline-block;
+			}
+		}
 	</style>
 	<script>
 		function setTimeInputActive(event){
@@ -43,31 +52,37 @@
 </head>
 <body>
 	<%- include('navheader'); %>
-	<h3>Create game on map <b><%= mapname %></b></h3>
-	<div><%= description %></div>
-	<br>
-	<span style="background-color:lavender;padding:3px;">Contains <%= locationcount %> locations</span>
-	<br>
-	<% if(highscoregameid){ %>
-		<br><span><b>Your high score: </b><a href="/game/<%= highscoregameid %>"><%= score %> points, <%= Math.floor(elapsed/1000/60) %>:<%= (Math.floor(elapsed/1000)%60).toString().padStart(2, "0") %></a></span><br>
-	<% } %>
-	<br>
-	<form autocomplete="on" method="post" id="new-game-form" action="/newgame/<%= mapid %>">
-		<div class="form-outline">
-			<select name="freedom">
-				<option value="moving" selected>Moving</option>
-				<option value="nm">No Moving</option>
-				<option value="nmpz">No Moving, Panning or Zooming</option>
-			</select>
+	<main>
+		<div>
+			<h3>Create game on map <b><%= mapname %></b></h3>
+			<div><%= description %></div>
 			<br>
-			<label for="time-limit-box">Time Limit </label><input type="checkbox" name="time_limit" id="time-limit-box" onchange="setTimeInputActive(event)"><input type="number" min="0" max="999" name="time_limit_minutes"> min <input type="number" min="0" max="59" name="time_limit_seconds"> sec 
-			<br>
-			<input type="submit" value="New game" class="new-game"/>
-			<br>
-			<input type="checkbox" name="challenge" id="challenge-box"><label for="challenge-box">Challenge others</label>
+			<span style="background-color:lavender;padding:3px;">Contains <%= locationcount %> locations</span>
 		</div>
-	</form>
-	<a href="/createduel/<%= mapid %>" class="fake-button">Duel in <%= mapname %></a>
+		<br>
+		<% if(highscoregameid){ %>
+			<br><span><b>Your high score: </b><a href="/game/<%= highscoregameid %>"><%= score %> points, <%= Math.floor(elapsed/1000/60) %>:<%= (Math.floor(elapsed/1000)%60).toString().padStart(2, "0") %></a></span><br>
+		<% } %>
+		<br>
+		<div>
+			<form autocomplete="on" method="post" id="new-game-form" action="/newgame/<%= mapid %>">
+				<div class="form-outline">
+					<select name="freedom">
+						<option value="moving" selected>Moving</option>
+						<option value="nm">No Moving</option>
+						<option value="nmpz">No Moving, Panning or Zooming</option>
+					</select>
+					<br>
+					<label for="time-limit-box">Time Limit </label><input type="checkbox" name="time_limit" id="time-limit-box" onchange="setTimeInputActive(event)"><input type="number" min="0" max="999" name="time_limit_minutes"> min <input type="number" min="0" max="59" name="time_limit_seconds"> sec 
+					<br>
+					<input type="submit" value="New game" class="new-game"/>
+					<br>
+					<input type="checkbox" name="challenge" id="challenge-box"><label for="challenge-box">Challenge others</label>
+				</div>
+			</form>
+			<a href="/createduel/<%= mapid %>" class="fake-button">Duel in <%= mapname %></a>
+		</div>
+	</main>
 	<script>
 		window.addEventListener('load', () => {
 			setTimeInputActive({target:document.getElementsByName("time_limit")[0]})

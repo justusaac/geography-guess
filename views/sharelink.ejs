@@ -1,6 +1,6 @@
 <script defer src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs@0.0.2/qrcode.min.js"></script>
 <% const componentID = `sharelink-${Math.random().toString(36).slice(2)}` %>
-<% const QRcodesize = 300 %>
+<% const QRcodesize = 256 %>
 <a id="anchor-<%= componentID %>" href="<%= url %>"><%= url %></a>
 <button id="copybutton-<%= componentID %>" onclick="
 	navigator.clipboard.writeText(document.getElementById('anchor-<%= componentID %>').textContent).then(()=>event.target.textContent = 'Copied!')

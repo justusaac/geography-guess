@@ -193,7 +193,10 @@ html,body{
 	--timer-duration:0s;
 	--timer-message: "21";
 	transition: --timer-progress var(--timer-duration) linear;
-	background: linear-gradient(in hsl to left, white 0%, white calc(var(--timer-progress) * 100%), hsl(calc((1 - var(--timer-progress)) * 120deg) 100% 50%)  calc(var(--timer-progress) * 100%), red 100%);
+	background:linear-gradient(in hsl to right, red 0%, hsl(calc((1 - var(--timer-progress)) * 120deg) 100% 50%)  100%);
+	background-color:rgba(255,255,255,0.5);
+	background-size:calc(calc(1 - var(--timer-progress)) * 100%);
+	background-repeat:no-repeat;
 	color:white;
 	padding:10px 5px;
 	margin: 5px auto;
