@@ -21,7 +21,7 @@
     		background-color:rgba(0,0,0,0.4);
     		background-repeat:no-repeat;
     		border: 1px solid #959595;
-    		border-radius:3px;
+    		border-radius:4px;
     		transition: --current-health 2s ease-in-out 1.5s;
     		&::after{
     			content: counter(currenthealth) " / " counter(maxhealth);
@@ -474,7 +474,7 @@
 					this.add_results_to_map(guesses, Array(guesses.length).fill(round_data.location), usernames, labels, Array(guesses.length).fill((round_data.round+1).toString()), teamnames);
 				}
 				//12 second time for viewing results(keep the same as the server)
-				this.set_timer(round_data.finish_time, 12000);
+				this.set_timer(round_data.finish_time, 12000, true);
 			}
 			show_game_results(game_info){
 				this.switch_view('game-results-container');

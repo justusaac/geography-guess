@@ -190,12 +190,14 @@ html,body{
 	width:fit-content;
 	z-index:7;
 	--timer-progress:0;
-	--timer-duration:0s;
+	--total-timer-ms:0;
+	--timer-duration-ms:0;
+	--timer-duration:calc(1ms * var(--timer-duration-ms));
 	--timer-message: "21";
 	transition: --timer-progress var(--timer-duration) linear;
 	background:linear-gradient(in hsl to right, red 0%, hsl(calc((1 - var(--timer-progress)) * 120deg) 100% 50%)  100%);
 	background-color:rgba(255,255,255,0.5);
-	background-size:calc(calc(1 - var(--timer-progress)) * 100%);
+	background-size:calc((1 - var(--timer-progress)) * 100%);
 	background-repeat:no-repeat;
 	color:white;
 	padding:10px 5px;
@@ -203,10 +205,25 @@ html,body{
 	font-size:2.5em;
 	border-radius:20px;
 	&::after{
-		background:gray;
 		content:var(--timer-message);
 		border-radius:15px;
 		padding:5px 10px;
+		--color-change-progress:calc(100% - (100% * clamp(0, (((var(--total-timer-ms) * (1 - var(--timer-progress))) - 15000) / 200), 1)));
+		color:rgba(
+			100%, 
+			calc(100% - (var(--color-change-progress) * 0.9)), 
+			calc(100% - (var(--color-change-progress) * 0.9))
+		);
+		background-color:rgba(
+			calc((0.3 * var(--color-change-progress)) + 60%),
+			calc((0.3 * var(--color-change-progress)) + 60%),
+			calc((0.3 * var(--color-change-progress)) + 60%)
+		);
+	}
+}
+.nohurry{
+	&::after{
+		--color-change-progress:0%;
 	}
 }
 @property --timer-progress{

@@ -286,12 +286,16 @@ class MysteryPano{
 		}
 
 	}
-	set_timer(start_time, duration){
+	set_timer(start_time, duration, nohurry=false){
 		for(const el of this.root.getElementsByClassName("round-timer")){
 			const now = Date.now()
 			const curr_progress = (now-start_time)/duration;
-			el.classList.remove("hidden");
-			el.style.setProperty('--timer-duration','0s');
+			el.classList.remove("hidden", "nohurry");
+			if(nohurry){
+				el.classList.add("nohurry");
+			}
+			el.style.setProperty('--timer-duration-ms','0');
+			el.style.setProperty('--total-timer-ms',duration);
 			el.style.setProperty('--timer-progress',`${curr_progress}`);
 			clearInterval(el.timer_interval);
 			const update_timer_msg = ()=>{
@@ -305,10 +309,10 @@ class MysteryPano{
 				}
 				el.style.setProperty('--timer-message', '"'+MysteryPano.format_time(time_left,duration)+'"');
 
-				el.style.setProperty('--timer-duration','0s');
+				el.style.setProperty('--timer-duration-ms','0');
 				el.style.setProperty('--timer-progress',`${progress}`);
 				el.offsetHeight;
-				el.style.setProperty('--timer-duration',`${time_left}ms`);
+				el.style.setProperty('--timer-duration-ms',`${time_left}`);
 				el.style.setProperty('--timer-progress','1');
 			}
 			el.timer_interval = setInterval(update_timer_msg, 100);
