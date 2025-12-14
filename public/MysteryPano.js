@@ -139,7 +139,9 @@ class MysteryPano{
 		}
 		this.clear_map();
 		google.maps.event.clearListeners(this.map, "click");
-		this.map?.classList?.remove('expanded')
+		for(const map of this.root.getElementsByClassName('button-and-map')){
+			map.classList.remove('expanded');
+		}
 	}
 	add_to_map(item){
 		if(!Object.is(item.getMap ? item.getMap() : item.map, this.map)){
