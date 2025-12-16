@@ -18,6 +18,12 @@ const passport = require('passport');
 const LocalStrategy = require('passport-local');
 const crypto = require('crypto');
 const pg_session = require("connect-pg-simple")(session);
+const multer = require('multer');
+const uploads = multer({
+    dest:__dirname+"/uploads",
+    limits:{ fileSize:25 * 1000000 }
+});
+const fs = require('fs');
 
 const MapFile = require(__dirname+"/map_file_storage.js");
 const { score, great_circle_distance } = require(__dirname+"/scoring.js");
@@ -71,6 +77,25 @@ function require_auth(req, res, next) {
         return next();
     }
     res.redirect('/login.html?redirect='+encodeURIComponent(req.url));
+}
+async function require_not_guest(req,res,next) {
+    const userid = req?.session?.passport?.user?.id;
+    const result = await db_pool.query("select PasswordHash from Users where UserID=$1", [userid]);
+    if(!result?.rows?.[0]?.passwordhash){
+        const username = req?.session?.passport?.user?.username;
+        return res.render("forbidden", {username:`${username} (GUEST USER)`});
+    }
+    next();
+}
+async function require_map_owner(req,res,next){
+    const userid = req?.session?.passport?.user?.id;
+    const mapid = req.body.mapid;
+    const result = await db_pool.query("select 67 from Maps where UserID=$1::integer and MapID=$2::integer limit 1", [userid, mapid]);
+    if(result.rows.length<1){
+        const username = req?.session?.passport?.user?.username;
+        return res.render("forbidden", with_username({},req));
+    }
+    next();
 }
 function with_username(obj, req){
     return {...obj, username: req?.session?.passport?.user?.username};
@@ -515,6 +540,76 @@ app.post('/maps', require_auth, async (req,res) => {
     const result = await db_pool.query('select Maps.MapID, Maps.MapName, Maps.Description, Users.UserID, Users.Username from Maps left join Users on Maps.UserID=Users.UserID where lower(Maps.MapName) like lower($3) order by Maps.MapID limit $1::int offset $2::int', [number, page*number, '%'+query+'%'])
     res.end(JSON.stringify(result?.rows))
 });
+
+
+app.get('/createmap', require_auth, require_not_guest, (req,res)=>{
+    res.render('createmap', with_username({},req));
+})
+const map_upload_middleware = uploads.fields([{name:'locations', maxCount:1}]);
+app.post('/uploadmap', require_auth, require_not_guest, map_upload_middleware, async (req,res)=>{
+    try{
+        const {mapname, description} = req.body;
+        if(!mapname){
+            res.status(400);
+            res.end("Map name required");
+            return;
+        }
+        const userid = req?.session?.passport?.user?.id;
+        const result = await db_pool.query("select 67 from Maps where UserID=$1::integer and MapName=$2::text limit 1", [userid, mapname]);
+        if(result.rows.length>0){
+            res.status(400);
+            res.end(`You already have a map named "${mapname}"`);
+            return;
+        }
+        const mapid = await MapFile.create(mapname, description, userid);
+        try{
+            const mf = await MapFile.open(mapid, true);
+            try{
+                for(const {path} of req.files.locations){
+                    const readstream = fs.createReadStream(path, {encoding:'utf8'});
+                    await mf.import(readstream);
+                }
+                if(await mf.location_count()<1){
+                    throw new Error("No locations");
+                }
+                await mf.update_metadata();
+                res.status(200);
+                res.end(`${mapid}`);
+            }
+            finally{
+                mf.close();
+            }
+        }
+        catch(e){
+            MapFile.delete(mapid);
+            throw e;
+        }
+    }
+    catch(e){
+        res.status(400);
+        res.end(`Error with uploaded file (${e.message})`);
+    }
+    finally{
+        for(const key in req.files){
+            for(const {path} of req.files[key]){
+                fs.promises.rm(path);
+            }
+        }
+    }
+});
+app.post('/deletemap', require_auth, require_not_guest, require_map_owner, async (req,res)=>{
+
+    const mapid = req.body.mapid;
+    await MapFile.delete(mapid);
+    res.status(200);
+    res.end();
+});
+
+app.get('/mymaps', require_auth, require_not_guest, async (req,res)=>{
+    const {rows} = await db_pool.query("select MapID,MapName,Description,LocationCount from Maps where UserID=$1::int order by CreateTime desc",[req.session.passport.user.id]);
+    res.render('mymaps',with_username({rows},req)); 
+});
+
 app.get('/duels', require_auth, (req,res)=>{
     res.render('duelbrowser', with_username({},req));
 })
@@ -769,7 +864,7 @@ app.ws("/ws/duelroomsession/:id", asyncWrapper(async (ws,req) => {
                     first_multiplier_round:Math.abs(Number(info.first_multiplier_round)),
                     multiplier_increase:Number(info.multiplier_increase),
                     pinpointing:Boolean(info.pinpointing),
-                    pinpointing_target:Math.abs(Math.ceil(Number(info.pinpointing_target))) || 10,
+                    pinpointing_target:Math.abs(Math.ceil(Number(info.pinpointing_target))) || 5,
                     teams:info.teams, //Will be validated/reformed when it actually starts
                 };
                 client.query("begin;");

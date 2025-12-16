@@ -9,6 +9,7 @@
     "express": "^5.1.0",
     "express-session": "^1.18.1",
     "express-ws": "^5.0.2",
+    "multer": "^2.0.2",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "pg": "^8.16.0",

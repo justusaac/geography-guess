@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/global_styles.css"/>
+	<link rel="stylesheet" href="/form_page_style.css"/>
+	<title>Create a map</title>
+	<style>
+		main{
+			display:flex;
+			flex-direction:row;
+			width:100%;
+			flex-wrap:wrap;
+			& > *{
+				flex:1;
+			}
+		}
+		textarea[name="contents"]{
+			grid-column:span 2;
+		}
+		textarea{
+			resize:vertical;
+		}
+		form{
+			grid-template-columns: 1fr 2fr;
+		}
+		.rhs{
+			min-width:250px;
+			text-align:start;
+			margin:3px;
+			padding:3px;
+			border: 1px solid var(--main-foreground-color);
+			border-radius:3px;
+			background:linear-gradient(165deg, rgba(50%, 50%, 100%, 0.2) ,rgba(60%,  40%, 0%, 0.2));
+		}
+		.lhs{
+			flex-basis:max-content;
+		}
+		.show{
+			display:block;
+		}
+		.good{
+			border-color:green;
+			background-color:#b3ffb0;
+		}
+	</style>	
+	<script>
+		function showError(msg){
+			for(const elem of document.getElementsByClassName("error-message")){
+				elem.innerHTML = msg;
+				elem.classList.remove("good");
+				elem.classList.add("show");
+			}
+		}
+		function showSuccess(msg){
+			showError(msg);
+			for(const elem of document.getElementsByClassName("error-message")){
+				elem.classList.add("good");
+			}
+		}
+		function hideError(){
+
+			for(const elem of document.getElementsByClassName("error-message")){
+				elem.classList.remove("show");
+			}
+		}
+		async function submitForm(event){
+			event.preventDefault();
+			hideError();
+			const fd = new FormData(document.getElementById("mapform"));
+			if(!fd.get("mapname")){
+				showError("Map name required");
+				return;
+			}
+			try{
+				JSON.parse(fd.get("contents"))
+			}
+			catch(err){
+				showError(`Locations: ${err.message}`);
+				return;
+			}
+			const blob = new Blob([fd.get("contents")], {type:"application/json"});
+			fd.delete('contents');
+			fd.append('locations',blob,'blob');
+			showSuccess("Sending...");
+			const response = await fetch("/uploadmap", {method:"POST", body:fd} );
+			if(response.status==200){
+				showSuccess("Success!");
+				const newMapId = await response.text();
+				window.location.href = `/creategame/${newMapId}`;
+			}
+			else{
+				showError(await response.text())
+			}
+			return false;
+
+		}
+	</script>
+</head>
+<body>
+	<%- include('navheader'); %>
+	<main>
+		<form class="lhs" onsubmit="submitForm(event)" id="mapform">
+			<div class="error-message"></div>
+			<label for="mapname">Map Name:</label>
+			<input type="text" name="mapname" id="mapname"/>
+
+			<label for="description">Description:</label>
+			<textarea name="description" id="description"></textarea>
+
+			<label for="contents">Locations:</label><span></span>
+			<textarea name="contents" id="contents" rows="10"></textarea>
+			<input type="submit" value="Save"/>
+		</form>
+		<div class="rhs">
+			Locations format: JSON array of objects with keys "lat", "lng" (required) and "heading", "pitch", and "zoom" (optional), all with numerical values.
+			<br>
+			It could also be an object with its only array value being that.
+			<br>
+			Recommended to use an external map generator for this.
+		</div>
+	</main>
+</body>
+</html>

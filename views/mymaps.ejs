@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/global_styles.css"/>
+	<title>Uploaded maps</title>
+	<style>
+		.map-info-card{
+			display:flex;
+			flex-direction:row;
+			justify-content:space-between;
+			margin:6px 3px;
+			border-radius:5px;
+            box-shadow:0 0 2px 0px var(--main-foreground-color);
+            border: 1px solid var(--main-foreground-color);
+            align-items:center;
+            background:linear-gradient(to right in hsl, rgba(0,255,135,0.2), 82%, rgba(255,0,0,0.2));
+		}
+		.delete-map-button{
+			vertical-align:center;
+			padding:3px;
+			margin:5px;
+			color:red;
+			border: 1px solid red;
+			border-radius:3px;
+		}
+		.maplink{
+			padding:5px;
+			flex-grow:1;
+			text-decoration:none;
+			color:var(--main-foreground-color);
+			background:rgba(0,0,0,var(--background-darken));
+            --background-darken:0;
+            &:hover{
+            	--background-darken:0.067;
+            }
+		}
+	</style>
+	<script>
+		async function sendDeleteMap(mapid){
+			const params =new URLSearchParams();
+			params.append('mapid',mapid);
+			const res = await fetch('/deletemap', {method:'POST', body:params});
+			if(res.status == 200){
+				window.location.href = window.location.href;
+			}
+		}
+	</script>
+</head>
+<body>
+	<%- include('navheader'); %>
+	<h2>Your maps</h2>
+	<a href="/createmap" class="fake-button">Upload a new map</a>
+	<hr>
+	<div>
+		<% for(const mapinfo of rows){ %>
+			<div class="map-info-card">
+				<a href="/creategame/<%= mapinfo.mapid %>" class="maplink">
+					<strong><%= mapinfo.mapname %></strong>
+					<br>
+					<%= mapinfo.description %>
+					<br>
+					<i><%= mapinfo.locationcount %> location<%= mapinfo.locationcount != 1 ? 's' : '' %></i>
+				</a>
+				<button class="delete-map-button" onclick='
+					if(confirm(`Really delete "<%= mapinfo.mapname %>"?`)){
+						sendDeleteMap(<%= mapinfo.mapid %>)
+					}
+				'>
+					Delete
+				</button>
+			</div>
+		<% } %>
+	</div>
+</body>
+</html>

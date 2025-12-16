@@ -53,6 +53,19 @@ class MapFile{
     	instance.mapid = mapid;
 		return instance;
 	}
+	static async delete(mapid){
+		const client = new pg.Client();
+		await client.connect();
+		await client.query("begin");
+		const lom = new LargeObjectManager(client);
+		const result = await client.query("delete from Maps where MapID=$1::integer returning objectid", [mapid]);
+		for(const {objectid} of result.rows){
+			await lom.unlinkAsync(objectid);
+		}
+		await client.query("commit");
+		client.end();
+		return result.rows.length;
+	}
 	async update_metadata(){
 		const score_modifier = await this.score_modifier();
 		const location_count = await this.location_count();
@@ -138,6 +151,11 @@ class MapFile{
 		});
 	}
 
+	async clear(){
+		return this.largeobject.truncateAsync(0);
+	}
+
+
 	async filter(predicate){
 		await this.largeobject.seekAsync(0, LargeObject.SEEK_SET);
 		let i=0;
@@ -197,6 +215,9 @@ class MapFile{
 			}
 			const bounds = lng_bounds_skipped_quadrants[i]
 			lng_range = Math.min(lng_range, bounds.max-bounds.min);
+		}
+		if(lat_range==0 && lng_range==0){
+			return 1;
 		}
 		return Math.max(lng_range/180, lat_range/90);
 	}
