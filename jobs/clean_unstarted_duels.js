@@ -5,4 +5,5 @@ const pg = require('pg');
 	const pool = new pg.Pool();
 	const res = await pool.query("delete from Duels where extract(day from current_timestamp-createtime)>45 and Started=false;");
 	console.log(res);
+	pool.end();
 })()

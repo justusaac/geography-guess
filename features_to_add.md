@@ -1,8 +1,6 @@
-- User submitted maps
 - Account settings
 - Duels
 	-more customization (different hp, multipliers, ...)
-	-pinpointing mode
 - Rotating locations on world map
 - Add full setup script for .env file and db initialization
 - sizzling css
