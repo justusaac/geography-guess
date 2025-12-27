@@ -6,6 +6,7 @@
     <link rel="stylesheet" href="/global_styles.css"/>
 	<link rel="stylesheet" href="/form_page_style.css"/>
 	<title>Create a map</title>
+    <script src="/spaify.js"></script>
 	<style>
 		main{
 			display:flex;
@@ -88,7 +89,7 @@
 			if(response.status==200){
 				showSuccess("Success!");
 				const newMapId = await response.text();
-				window.location.href = `/creategame/${newMapId}`;
+				(window.SPAify?.navigateTo || window.location.assign.bind(window.location))(`/creategame/${newMapId}`);
 			}
 			else{
 				showError(await response.text())
@@ -101,7 +102,7 @@
 <body>
 	<%- include('navheader'); %>
 	<main>
-		<form class="lhs" onsubmit="submitForm(event)" id="mapform">
+		<form class="lhs" onsubmit="submitForm(event)" id="mapform" autocomplete="off">
 			<div class="error-message"></div>
 			<label for="mapname">Map Name:</label>
 			<input type="text" name="mapname" id="mapname"/>

@@ -6,6 +6,7 @@
     <link rel="stylesheet" href="/global_styles.css"/>
 	<link rel="stylesheet" href="/form_page_style.css"/>
 	<title>Duel lobby</title>
+    <script src="/spaify.js"></script>
 	<style>
 		.rules-form{
 			display:inline-block;
@@ -174,7 +175,7 @@
 				elem.classList[rules.pinpointing ? "remove" : "add"]("hidden")
 			}
 			for(const elem of document.getElementsByName("pinpointing_target")){
-				elem.value = rules.pinpointing_target;
+				elem.value = rules.pinpointing_target ?? 0;
 			}
 			for(const selector of ['.multipliers-stuff', 'label[for="max-health-input"]']){
 				for(const elem of document.querySelectorAll(selector)){
@@ -385,7 +386,7 @@ window.addEventListener('load', () => {
 	const duelid = path[path.length-1];
 	const url = (window.location.protocol=="https:" ? "wss:" : "ws:")+"//"+window.location.host+"/ws/duelroomsession/"+duelid;
 	const socket = new WebSocket(url);
-	socket.addEventListener("close", (evt)=>show_error(evt));
+	socket.addEventListener("close", (evt)=>show_error(evt),{once:true});
 	socket.addEventListener("message", msg => {
 		//console.log(msg.data)
 		const data = JSON.parse(msg.data);
@@ -397,7 +398,8 @@ window.addEventListener('load', () => {
 			update_player_list(info);
 		}
 		else if(type == "start_duel"){
-			window.location.replace("/duel/"+duelid);
+			const new_url = "/duel/"+duelid;
+			(window.SPAify?.navigateToReplace || window.location.replace.bind(window.location))(new_url);
 		}
 	})
 	const form = document.getElementById("rules-form");

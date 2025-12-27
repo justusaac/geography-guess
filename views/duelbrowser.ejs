@@ -5,6 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/global_styles.css"/>
 	<title>Duel browser</title>
+    <script src="/spaify.js"></script>
 	<style>
 		.duel-card{
             box-shadow:0 0 2px 0px var(--main-foreground-color);
@@ -120,7 +121,7 @@
 			document.getElementById('load-more').style.visibility="collapse"
 			const response = await fetch("/duels", {method:'POST', body:new URLSearchParams(fd)});
 			if(response.redirected){
-				window.location.href = response.url;
+				(window.SPAify?.navigateTo || window.location.assign.bind(window.location))(response.url);
 				return;
 			}
 			const duels = await response.json();
@@ -148,9 +149,10 @@
 			document.getElementById('form-results').innerHTML = ""
 			sendForm()
 		}
+        document.addEventListener('DOMContentLoaded',()=>sendForm());
 	</script>
 </head>
-<body onload="sendForm()">
+<body>
 	<%- include('navheader'); %>
 	<main>
 		<span id="main-span">

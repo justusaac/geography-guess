@@ -4,8 +4,10 @@
 	<meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Map View</title>
+    <script src="/spaify.js"></script>
     <link rel="stylesheet" href="/global_styles.css"/>
     <link rel="stylesheet" href="/MysteryPanoStyle.css"/>
+	<script src="/load_maps_api.js"></script>
 </head>
 <body>
 	<div id="game-container">
@@ -73,7 +75,7 @@
 				<button class="lock-in-button">Guess</button>
 			</div>
 		</div>
-		<div class="round-results-container">
+		<div class="round-results-container hidden">
 			<div class="round-results-map-container">
 			</div>
 			<div class="round-results-bottom">
@@ -81,7 +83,7 @@
 				<button class="next-round-button">Next round</button>
 			</div>
 		</div>
-		<div class="game-results-container">
+		<div class="game-results-container hidden">
 			<div class="game-results-map-container">
 			</div>
 			<div class="game-results-bottom">
@@ -95,9 +97,11 @@
 		window.onMapsLoad = async ()=>{
 			const gameId = MysteryPano.get_game_id();
 			const url = (window.location.protocol=="https:" ? "wss:" : "ws:")+"//"+window.location.host+"/ws/gamesession/"+gameId;
-			new MysteryPano(document.getElementById("game-container"), url);
+			const root = document.getElementById("game-container");
+			if(root){
+				new MysteryPano(root, url);
+			}
 		};
 	</script>
-	<script src="/load_maps_api.js"></script>
 </body>
 </html>

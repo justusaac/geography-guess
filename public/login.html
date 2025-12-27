@@ -4,6 +4,7 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Login</title>
+    <script src="/spaify.js"></script>
 	<link rel="stylesheet" href="/global_styles.css"/>
 	<link rel="stylesheet" href="/form_page_style.css"/>
 	<script>
@@ -19,10 +20,10 @@
 			const params = new URLSearchParams(window.location.search);
 			const destination = params.get("redirect");
 			if(!destination){
-				window.location.href = response.url;
+				(window.SPAify?.navigateTo || window.location.assign.bind(window.location))(response.url);
 				return;
 			}
-			window.location.href = window.location.origin + decodeURIComponent(destination);
+			(window.SPAify?.navigateTo || window.location.assign.bind(window.location))(window.location.origin + decodeURIComponent(destination));
 		}
 		async function sendForm(event){
 			event.preventDefault();

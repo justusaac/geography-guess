@@ -103,7 +103,7 @@ html,body{
 }
 .button-and-map:not(.expanded){
 	transition-delay:.7s;
-	transition-duration:.15s;
+	transition-duration:0.15s;
 	transition-property: height, width, opacity, background-color;
 	height:30%;
 	width:20%;

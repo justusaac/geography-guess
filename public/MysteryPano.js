@@ -1,31 +1,41 @@
-'use strict';
-class MysteryPano{
+var MysteryPano = class MysteryPano {
+
 	constructor(rootElem, socketURL){
 		this.root = rootElem;
 		this.socket = new WebSocket(socketURL);
-		
-		const mapElem = document.createElement('div');
-		mapElem.style.width="100%";
-		mapElem.style.height="100%";
-		this.map = new google.maps.Map(
-			mapElem, 
-			{
-				cameraControl:false,
-				clickableIcons:false,
-				fullscreenControl:false,
-				streetViewControl:false,
-				scaleControl:true,
-				mapId:"Stunna boy get em real hollywood star"
-			}
-		);
+
+		window.RECYCLE_GM_StreetViewPanorama?.setPano?.("NOPANO");
+
+		this.map = window.RECYCLE_GM_Map;
+		if(!this.map){
+			const mapElem = document.createElement('div');
+			mapElem.style.width="100%";
+			mapElem.style.height="100%";
+			this.map = new google.maps.Map(mapElem);
+			window.RECYCLE_GM_Map = this.map
+		}
+		else{
+			google.maps.event.clearListeners(this.map, 'click');
+			google.maps.event.trigger(this.map, 'resize')
+		}
+		this.map.setOptions({
+			cameraControl:false,
+			clickableIcons:false,
+			fullscreenControl:false,
+			streetViewControl:false,
+			scaleControl:true,
+			mapId:"Stunna boy get em real hollywood star"
+		})
+		this.clear_map();
 		this.map.decor = [];
 		this.adjust_expanded_map(true);
 		this.socket.addEventListener("close", (e)=>{
+			this.clear_timer();
 			this.show_error(`Websocket connection lost${e.reason?': "':''}${e.reason}${e.reason?'"':''}`)
 			for(const btn of this.root.getElementsByClassName("lock-in-button")){
 				btn.textContent = "Disconnected"
 			}
-		});
+		},{once:true});
 		this.socket.addEventListener("message", msg => {
 			//console.log(msg.data)
 			const data = JSON.parse(msg.data);
@@ -48,7 +58,7 @@ class MysteryPano{
 					console.error(data.message);
 					this.show_error(data.message);
 				},
-			}[data.type]());
+			}[data.type]?.());
 		})
 
 
@@ -155,8 +165,8 @@ class MysteryPano{
 		}
 	}
 	clear_map(){
-		while(this.map.decor.length){
-			this.map.decor.pop().setMap(null);
+		while(this.map?.decor?.length){
+			this.map?.decor?.pop?.()?.setMap?.(null);
 		}
 	}
 	get_pano_control_options(){
@@ -179,34 +189,49 @@ class MysteryPano{
 		this.movement_history_with_pop = [];
 		//this.pano=null;
 		if(!this.pano){
-			this.pano = new google.maps.StreetViewPanorama(
-				this.root.querySelector('.pano-container-real'),
-				{
-					visible:true,
-					motionTracking:false,
-					showRoadLabels:false,
-					disableDefaultUI:true,
-					linksControl:true,
-					zoomControl:true,
-					zoomControlOptions:{position:google.maps.ControlPosition.TOP_RIGHT},
-					...this.get_pano_control_options()
-				}
-			);
-			this.pano.registerPanoProvider((id)=>{
-				if(id != "NOPANO"){
-					return null;
-				}
-				return {
-					tiles:{
-						centerHeading:0,
-						tileSize:{width:100,height:100},
-						worldSize:{width:100,height:100},
-						getTileUrl:(panoid,tz,tx,ty)=>{
-							return null;
-						}
+			this.pano = window.RECYCLE_GM_StreetViewPanorama;
+			if(!this.pano){
+				const panoElem = document.createElement('div');
+				panoElem.style.width="100%";
+				panoElem.style.height="100%";
+				this.pano = new google.maps.StreetViewPanorama(panoElem);
+				this.pano.getDiv = () => panoElem;
+				window.RECYCLE_GM_StreetViewPanorama = this.pano;
+				this.pano.registerPanoProvider((id)=>{
+					if(id != "NOPANO"){
+						return null;
 					}
-				};
-			},{cors:true});
+					const res = 512;
+					return {
+						tiles:{
+							centerHeading:0,
+							tileSize:{width:res,height:res},
+							worldSize:{width:res*5,height:res*3},
+							getTileUrl:(panoid,tz,tx,ty)=>{
+								return null && `https://placehold.co/${res}x${res}`;
+							}
+						}
+					};
+				},{cors:true});
+
+			}
+			else{
+				google.maps.event.clearListeners(this.pano, 'pov_changed');
+				google.maps.event.clearListeners(this.pano, 'position_changed');
+				google.maps.event.clearListeners(this.pano, 'pano_changed');
+				google.maps.event.trigger(this.map, 'resize')
+			}
+			this.root.querySelector('.pano-container-real')?.appendChild(this.pano?.getDiv?.())
+			this.pano.setOptions({
+				visible:true,
+				motionTracking:false,
+				showRoadLabels:false,
+				disableDefaultUI:true,
+				linksControl:true,
+				zoomControl:true,
+				zoomControlOptions:{position:google.maps.ControlPosition.TOP_RIGHT},
+				...this.get_pano_control_options()
+			})
 			google.maps.event.addListener(this.pano, "pov_changed", this.pov_changed.bind(this));
 			
 		}
@@ -557,10 +582,17 @@ class MysteryPano{
 			}));
 		}
 	}
+	set_loading_pano(){
+		if(this.pano){
+			this.pano.setPano("NOPANO");
+			this.pano.setPov({heading:0,pitch:0});
+			this.pano.setZoom(0);
+		}
+	}
 	show_round_results(round_info){
 
 		this.clear_timer();
-		this.pano?.setPano("NOPANO");
+		this.set_loading_pano();
 		this.switch_view('round-results-container');
 		for(const container of this.root.getElementsByClassName("round-results-map-container")){
 			container.appendChild(this.map.getDiv());
@@ -615,7 +647,7 @@ class MysteryPano{
 	}
 	show_game_results(game_info){
 		this.switch_view('game-results-container');
-
+		this.clear_timer();
 		for(const container of this.root.getElementsByClassName("game-results-map-container")){
 			container.appendChild(this.map.getDiv());
 		}

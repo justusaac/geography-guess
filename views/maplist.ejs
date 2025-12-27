@@ -4,6 +4,7 @@
 	<meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Maps</title>
+    <script src="/spaify.js"></script>
     <link rel="stylesheet" href="/global_styles.css"/>
     <link rel="stylesheet" href="/form_page_style.css"/>
     <style>
@@ -80,7 +81,7 @@
                 pageinput.value = parseInt(pageinput.value)+1;
                 const response = await fetch("/maps", {method:'POST', body:new URLSearchParams(fd)});
                 if(response.redirected){
-                    window.location.href = response.url;
+                    (window.SPAify?.navigateTo || window.location.assign.bind(window.location))(response.url);
                     return;
                 }
                 const maps = await response.json();
@@ -102,9 +103,10 @@
                 return false;
             }
         })();
+        document.addEventListener('DOMContentLoaded',()=>sendForm());
     </script>
 </head>
-<body onload="sendForm()">
+<body>
     
     <%- include('navheader'); %>
     <form onsubmit="sendForm(event)" id="search-form">

@@ -81,7 +81,7 @@ function require_auth(req, res, next) {
 async function require_not_guest(req,res,next) {
     const userid = req?.session?.passport?.user?.id;
     const result = await db_pool.query("select PasswordHash from Users where UserID=$1", [userid]);
-    if(!result?.rows?.[0]?.passwordhash){
+    if(!result?.rows?.[0]?.passwordhash?.trim()){
         const username = req?.session?.passport?.user?.username;
         return res.render("forbidden", {username:`${username} (GUEST USER)`});
     }

@@ -5,6 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/global_styles.css"/>
 	<title>Uploaded maps</title>
+    <script src="/spaify.js"></script>
 	<style>
 		.map-info-card{
 			display:flex;
@@ -43,7 +44,7 @@
 			params.append('mapid',mapid);
 			const res = await fetch('/deletemap', {method:'POST', body:params});
 			if(res.status == 200){
-				window.location.href = window.location.href;
+				document.getElementById(`map-card-${mapid}`)?.remove();
 			}
 		}
 	</script>
@@ -55,7 +56,7 @@
 	<hr>
 	<div>
 		<% for(const mapinfo of rows){ %>
-			<div class="map-info-card">
+			<div class="map-info-card" id="map-card-<%= mapinfo.mapid %>">
 				<a href="/creategame/<%= mapinfo.mapid %>" class="maplink">
 					<strong><%= mapinfo.mapname %></strong>
 					<br>

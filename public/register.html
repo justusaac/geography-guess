@@ -4,6 +4,7 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Register</title>
+    <script src="/spaify.js"></script>
 	<link rel="stylesheet" href="/global_styles.css"/>
 	<link rel="stylesheet" href="/form_page_style.css"/>
 	<script>
@@ -26,7 +27,7 @@
 
 			const response = await fetch("/register", {method:'POST', redirect:'follow', body:new URLSearchParams(fd)});
 			if(response.redirected){
-				window.location.href = response.url;
+				(window.SPAify?.navigateTo || window.location.assign.bind(window.location))(response.url);
 				return;
 			}
 			showError(await response.text())
