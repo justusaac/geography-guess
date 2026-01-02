@@ -208,7 +208,13 @@ html,body{
 		content:var(--timer-message);
 		border-radius:15px;
 		padding:5px 10px;
-		--color-change-progress:calc(100% - (100% * clamp(0, (((var(--total-timer-ms) * (1 - var(--timer-progress))) - 15000) / 200), 1)));
+		--color-change-progress:calc(
+			100% - (100% * clamp(
+				0, (
+					((var(--total-timer-ms) * (1 - var(--timer-progress))) - 15000) / 200
+				), 1
+			))
+		);
 		color:rgba(
 			100%, 
 			calc(100% - (var(--color-change-progress) * 0.9)), 

@@ -138,7 +138,7 @@ var MysteryPano = class MysteryPano {
 			}, {capture:true});
 		}
 		panodiv.addEventListener('keydown', (event) => {
-			if(!(this.game_info?.rules.moving && this.game_info?.rules.panning)){
+			if(!(this.game_info?.rules.moving && this.game_info?.rules.panning && this.game_info?.rules.zooming)){
 				event.stopPropagation();
 			}
 		}, {capture:true});

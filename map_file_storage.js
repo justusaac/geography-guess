@@ -313,7 +313,7 @@ class LCGenerator{
 		this.state = seed;
 	}
 	next(){
-		this.state = ((11882157 * this.state) + 67) % (2**31-1);
+		this.state = ((48271 * this.state) + 0) % (2**31-1);
 		return this.state;
 	}
 }

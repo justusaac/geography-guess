@@ -369,7 +369,7 @@
 		    	return this.calculate_round_results_normal(...args);
 		    }
 			show_round_results(round_data){
-				this.pano?.setPano("NOPANO");
+				this.set_loading_pano();
 				const curr_msg = {round:round_data.round, type:"round_results"};
 				this.most_recent_msg = curr_msg;
 				this.switch_view('round-results-container');
@@ -432,15 +432,18 @@
 								team_td.style.wordBreak = "break-word"
 								tr.appendChild(team_td);
 							}
+							const fontsize = (i==0) ? "1em" : "0.75em";
 							const username_td = document.createElement('td');
 							username_td.textContent = user;
 							username_td.style.wordBreak = "break-word"
 							if(user==this.game_info.you){
 								username_td.classList.add('highlighted');
 							}
+							username_td.style.fontSize = fontsize;
 							tr.appendChild(username_td);
 							const points_td = document.createElement('td');
-							points_td.innerHTML = `<b>${guess?.score || 0}</b> points<br>${guess?.distance ? MysteryPano.format_distance(guess.distance) : "No guess"}`;
+							points_td.innerHTML = `<${i==0?'b':'span'}>${guess?.score || 0}</${i==0?'b':'span'}> points<br>${guess?.distance ? MysteryPano.format_distance(guess.distance) : "No guess"}`;
+							points_td.style.fontSize = fontsize;
 							tr.appendChild(points_td);
 							if(i==0){
 								const delta_td = document.createElement("td");
@@ -509,7 +512,7 @@
 					const ending_health = game_info.health_before[game_info.health_before.length-1]
 					statusmsg.style.fontSize = "1.5em";
 					statusmsg.innerHTML = 
-						ending_health[you_team]>=(this.game_info.rules.pinpointing ? this.game_info.rules.pinpointing_target : 0)
+						ending_health[you_team]>(this.game_info.rules.pinpointing ? this.game_info.rules.pinpointing_target-1 : 0)
 							? "Victory! You won." 
 							: "Defeat! You lost.";
 					base.prepend(statusmsg, document.createElement("br"));

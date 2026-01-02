@@ -728,7 +728,7 @@ app.get("/createduel/:id", require_auth, async (req, res)=> {
         moving:true,
         panning:true,
         zooming:true,
-        time_limit:false,
+        time_limit:null,
         time_limit_after_guess:15000,
         max_health:6000,
         scoremodifier:map.scoremodifier
