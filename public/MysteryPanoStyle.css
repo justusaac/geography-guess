@@ -40,14 +40,20 @@ html,body{
 	padding:3px;
 	align-items:start;
 }
+.game-info-holder{
+	margin-top:10px;
+	direction:rtl;
+	max-height:150px;
+	overflow-y:auto;
+}
 .game-info{
-	z-index:11;
+	margin-right:auto;
+	direction:ltr;
+	word-wrap:anywhere;
+	width:fit-content;
+	height:fit-content;
 	color:white;
 	background-color: rgba(100,0,100,0.3);
-	margin-top:10px;
-	position:absolute;
-	top:0;
-	left:0;
 	padding:6px;
 	text-align:center;
 	font-family:sans-serif;
@@ -142,6 +148,21 @@ html,body{
 .hidden{
 	display:none !important;
 }
+.top-content{
+	display:grid !important;
+	grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+	position:absolute;
+	top:0;
+	z-index:11;
+	width:100%;
+	flex-wrap:wrap;
+}
+.top-content > *{
+	flex:auto;
+}
+.pano-container.hidden ~ .top-content > :is(.game-info-holder, .game-info-spacer){
+	display:none !important;
+}
 .round-results-container,.game-results-container{
 	display:flex;
 	flex-direction:column;
@@ -183,11 +204,8 @@ html,body{
 
 .round-timer{
 	font-family:monospace;
-	position:absolute;
-	top:0;
-	left:0;
-	right:0;
-	width:fit-content;
+	height:min-content;
+	width:min-content;
 	z-index:7;
 	--timer-progress:0;
 	--total-timer-ms:0;
