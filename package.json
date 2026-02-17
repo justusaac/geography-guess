@@ -18,5 +18,8 @@
   "type": "commonjs",
   "optionalDependencies": {
     "bufferutil": "^4.0.9"
+  },
+  "scripts": {
+    "start": "node server.js"
   }
 }

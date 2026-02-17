@@ -28,12 +28,15 @@ if(Boolean(window.history.pushState) && Boolean(window.history.replaceState) && 
 			return fallback();
 		}
 		if(url.pathname===window.location.pathname){
-			const different_hash = url.hash!=window.location.hash
-			if(different_hash){
-				history.pushState(window.history.state || document.documentElement.outerHTML, '', url.href);
+			const any_hash = Boolean(url.hash) || Boolean(window.location.hash);
+			if(any_hash){
+				const different_hash = url.hash!=window.location.hash
+				if(different_hash){
+					history.pushState(window.history.state || document.documentElement.outerHTML, '', url.href);
+				}
+				followHash(url);
+				return;
 			}
-			followHash(url);
-			return;
 		}
 		try{
 			const response = await fetch(url, { mode: 'same-origin', priority: 'high' });

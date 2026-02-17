@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/global_styles.css"/>
+	<title>StreetSearch</title>
+    <script src="/spaify.js"></script>
+    <style>
+    	main{
+    		max-width:670px;
+	    	text-align:center;
+	    	h1{
+	    		display:inline-block;
+	    		font-size:3em;
+	    		--road-color:rgba(40%, 40% ,40%,1);
+	    		--road-line-color:rgba(75%, 75%, 0%,1);
+	    		background-image:linear-gradient(
+	    			var(--road-color) 0%,
+	    			var(--road-color) 46%,
+	    			var(--road-line-color) 46%,	
+	    			var(--road-line-color) 54.5%,
+	    			var(--road-color) 54.5%,
+	    			var(--road-color) 63%,
+	    			var(--road-line-color) 63%,	
+	    			var(--road-line-color) 71.5%,
+	    			var(--road-color) 71.5%
+	    		);
+	    		background-clip:text;
+	    		color:transparent;
+	    	}
+	    		flex:auto;
+	    }
+	    .play-btn{
+	    	display:inline-block;
+	    	background-color:#4b4bff;
+	    	&:hover{
+	    		background-color:#6b6bff;
+	    	}
+	    	margin:10px;
+	    	padding:15px 25px;
+	    	border-radius:5px;
+    		font-size:1.2em;
+    		text-decoration:none;
+    		color:white;
+	    }
+	    .description{
+	    	border-top:1px solid rgba(0.5,0.5,0.5,0.5);
+	    	text-align:left;
+	    	margin:5px;
+	    	padding:5px;
+	    }
+	    .flexer{
+	    	display:flex;
+	    	flex-direction:row;
+	    	& > *{
+	    		width:min-content;
+	    	}
+	    	flex-wrap:wrap;
+	    	justify-content: center;
+	    }
+	    .updates{
+	    	border:1px solid orange;
+	    	background-color:rgba(255,100,0,0.3);
+	    	border-radius:5px;
+	    	margin:5px;
+	    	padding:5px;
+	    	width:min-content;
+	    }
+	    .updates-title{
+	    	text-align:center;
+	    	border-bottom:1px solid gray;
+	    	padding:5px;
+	    }
+	    .update{
+	    	border:1px solid blue;
+	    	background-color:rgba(210,255,255,1);
+	    	border-radius:5px;
+	    	margin:5px;
+	    	padding:5px;
+	    	color:black;
+	    	width:250px;
+	    }
+	    .updates-holder{
+	    	flex:none;
+	    	margin-left:30px;
+	    }
+    </style>
+</head>
+<body>
+	<%- include('navheader'); %>
+	<div class="flexer">
+		<main>
+			<br>
+			<h1>StreetSearch</h1>
+			<br>
+			<a href="/maplist" class="play-btn">
+				Play
+			</a>
+			<div class="description">
+				This is a Google Street View location guessing game, inspired by Geoguessr, Ethnoguessr, Timeguessr, etc.
+				<br/><br/>
+				There is a singleplayer mode with five locations, and multiplayer duels with normal health mode as well as pinpointing mode.
+				<br/><br/>
+				The site also features simulated page loading techniques so that you do not need to load the Google Maps library every time which makes the game load faster as well as reduces API costs.
+			</div>
+		</main>
+		<span class="updates-holder">
+			<div class="updates">
+				<div class="updates-title">Updates</div>
+				<span>
+					<div class="update">Guest users can now have custom usernames B)</div>
+				</span>
+			</div>
+		</div>
+	</div>
+</body>
+</html>

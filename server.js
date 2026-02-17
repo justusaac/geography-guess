@@ -295,7 +295,7 @@ const render_map_list = async(req, res) => {
     res.render('maplist', with_username({world_map:result.rows},req));
 };
 app.get("/maplist", require_auth, render_map_list);
-app.get("/", require_auth, render_map_list);
+app.get("/", (req,res)=>res.render("landing",with_username({},req)));
 
 app.get("/game/:id", require_auth_game_id, (req, res) => {
     res.sendFile(__dirname+'/public/mapview.html');
@@ -500,7 +500,8 @@ app.ws("/ws/gamesession/:id", asyncWrapper(async (ws, req) => {
             type:"game_info",
             rules:game.rules,
             mapname:gameinfo.mapname,
-            mapid:gameinfo.mapid
+            mapid:gameinfo.mapid,
+            challenge:gameinfo.challengeid!=null
         }));
     }
     ws.send(JSON.stringify(check_time_limit() || (() => {
@@ -621,23 +622,38 @@ app.post('/duels', require_auth, async (req,res) => {
         select Duels.DuelID, Duels.DuelInfo->'rules' as rules, coalesce(array_length(Duels.OpponentUserIDs,1),0)+1 as PlayerCount, Duels.MaxPlayers, Maps.MapID, Maps.MapName, Users.UserID, Users.Username from Duels cross join PrevRow left join Users on Users.UserID=Duels.MainUserID left join Maps on Maps.MapID=Duels.MapID where (PrevRow.SortKey is null or Duels.SortKey<PrevRow.SortKey) and Duels.Public=true and Duels.Started=false and (Duels.MaxPlayers is null or (coalesce(array_length(Duels.OpponentUserIDs,1),0)+1)<Duels.MaxPlayers) order by Duels.SortKey desc limit $1::int`,[number, last_seen]);
     res.end(JSON.stringify(result?.rows))
 });
-
-app.post("/register", (req, res) => {
-    if(!req.body || !req.body.password || !req.body.username){
-        return res.end("Necessary registration information not provided");
+const findLoginInfoProblems = (body, guest=false) => {
+    if(!body || (!guest && !body.password) || !body.username){
+        return "Necessary registration information not provided";
     }
-    if(!/^[A-Za-z0-9-_]+$/.test(req.body.username)){
-        return res.end("Prohibited characters in username");
+    if(!/^[A-Za-z0-9-_]+$/.test(body.username)){
+        return "Prohibited characters in username";
     }
-    bcrypt.hash(req.body.password, 13, async (err, hash) => {
-        try{
-            const result = await db_pool.query('insert into Users (Username, PasswordHash) values ($1::text, $2::text);', [req.body.username, hash]);
-            res.redirect('/login.html')
-        } catch(error) {
-            res.end(({
-                '23505':'Username is already in use',
-                '22001':'Username is too long'
-            }[error.code] ?? 'Unknown error occurred in registration'));
+    return null
+}
+const addUserToDb = async (username, passwordhash) => {
+    try{
+        const result = await db_pool.query('insert into Users (Username, PasswordHash) values ($1::text, $2::text) returning UserID, Username;', [username, passwordhash]);
+        return [true,result.rows[0]];
+    } catch(error) {
+        return [false,({
+            '23505':'Username is already in use',
+            '22001':'Username is too long'
+        }[error.code] ?? 'Unknown error occurred in registration')];
+    }
+}
+app.post("/register", async (req,res)=>{
+    const err = findLoginInfoProblems(req.body,false);
+    if(err){
+        return res.end(err);
+    }
+    bcrypt.hash(req.body.password, 13, async (e, hash) => {
+        const [success,msg] = await addUserToDb(req.body.username,hash);
+        if(!success){
+            return res.end(msg);
+        }
+        else{
+            res.redirect('/login.html');
         }
     })
 });
@@ -660,13 +676,18 @@ passport.use(new LocalStrategy(async (username, password, next) => {
     });
 }));
 passport.use('local-guest', new LocalStrategy(async (username, password, next) => {
-    username = "Guest-"+crypto.randomBytes(9).toString('base64url');
-    try{
-        const result = await db_pool.query('insert into Users (Username, PasswordHash) values ($1::text, $2::text) returning UserID, Username;', [username, ""]);
-        return next(null, {userid: result.rows[0].userid, username: result.rows[0].username});
-    } catch(error) {
-        return next(error)
+    if(!username.trim()){
+        username = "Guest-"+crypto.randomBytes(9).toString('base64url');
     }
+    const msg = findLoginInfoProblems({username,password}, true);
+    if(msg){
+        return next(msg);
+    }
+    const [success,info] = await addUserToDb(username, '');
+    if(!success){
+        return next(info);
+    }
+    return next(null, {userid: info.userid, username: info.username});
 }));
 passport.serializeUser((user, next) => {
     next(null, {id:user.userid, username: user.username});
@@ -687,7 +708,7 @@ app.post("/login-guest", (req, res,next ) => {
     req.flash = (type, msg) => {
         res.end(msg);
     };
-    req.body = {username:" ",password:" "};
+    req.body = {username:req.body.username||' ',password:" "};
     passport.authenticate('local-guest', {
         successRedirect: '/maplist',
         failureFlash:true,

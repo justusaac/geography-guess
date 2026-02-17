@@ -31,9 +31,28 @@
             box-sizing:border-box;
             background:linear-gradient(115deg, #c9f2ff, #fdbeff);
             background-attachment:fixed;
+
         }
         #world-map > .map-card{
             background:linear-gradient(to right in hsl, #fff17f, #ffd15f);
+        }
+        .loading{
+            --loading-gray:#e4e4e9;
+            background:linear-gradient(135deg, var(--loading-gray), var(--loading-gray) 70%, #f4ffff 75%, var(--loading-gray) 80%);
+            background-attachment:fixed;
+            animation: 4s ease-in-out 0s loading-shine;
+            animation-iteration-count:infinite;
+            background-repeat:repeat;
+            background-size:500vw;
+            box-shadow:unset;
+        }
+        @keyframes loading-shine {
+            0%{
+                background-position: 0% 0%;
+            }
+            100%{
+                background-position:500vw 0%;
+            }
         }
         .map-description{
             display:inline-block;
@@ -70,16 +89,39 @@
             return async function(event){
                 event?.preventDefault();
                 const fd = new FormData(document.getElementById('search-form'));
-                if(fd.get("query") != prevQuery){
-                    prevQuery = fd.get("query");
+                const newQuery= fd.get("query");
+                const differentQuery = (newQuery !== prevQuery);
+                if(differentQuery){
+                    prevQuery = newQuery;
                     document.getElementById("pageinput").value = "0";
-                    document.getElementById("load-more").style.visibility = "visible";
+                    document.getElementById("load-more").style.visibility = "collapse";
                     document.getElementById("form-results").innerHTML = "";
                     return sendForm();
                 }
+                const results = document.getElementById("form-results");
+                let loading_count = (results.children.length==0) ? 6 : 1
+                for(let i=0; i<loading_count; i++){
+                    const dummy = document.createElement('span');
+                    dummy.classList.add("map-card");
+                    dummy.classList.add("loading");
+                    dummy.innerHTML=`${i==0?"Loading...":""}&nbsp;`;
+                    dummy.appendChild(document.createElement('hr'));
+                    const dummydesc = document.createElement("span");
+                    dummydesc.classList.add("map-description");
+                    dummy.appendChild(dummydesc);
+                    results.appendChild(dummy);
+                }
                 const pageinput = document.getElementById("pageinput");
                 pageinput.value = parseInt(pageinput.value)+1;
-                const response = await fetch("/maps", {method:'POST', body:new URLSearchParams(fd)});
+                let response;
+                try{
+                    response = await fetch("/maps", {method:'POST', body:new URLSearchParams(fd)});
+                }
+                catch{
+                    results.append(document.createTextNode(`Network error =(`));
+                    results.querySelectorAll(".loading").forEach(x=>x.remove());
+                    return;
+                }
                 if(response.redirected){
                     (window.SPAify?.navigateTo || window.location.assign.bind(window.location))(response.url);
                     return;
@@ -89,28 +131,34 @@
                 for(const map of maps){
                     layout.push(formatMap(map))
                 }
-                const elem = document.getElementById('form-results')
+                results.querySelectorAll(".loading").forEach(x=>x.remove());
                 if(layout.length < fd.get("count")){
                     document.getElementById('load-more').style.visibility="collapse"
-                    if(elem.children.length==0 && layout.length<0){
-                        layout.push(`No maps found`)
+                    if(results.children.length==0 && layout.length==0){
+                        layout.push(document.createTextNode(`No maps found matching query`))
                     }
                 }
-                elem.append(...layout);
+                else{
+                    document.getElementById('load-more').style.visibility="visible"
+                }
+                results.append(...layout);
 
                 document.getElementById("world-map").style.display = (prevQuery=="") ? "revert-layer":"none";
 
                 return false;
             }
         })();
-        document.addEventListener('DOMContentLoaded',()=>sendForm());
+        document.addEventListener('DOMContentLoaded',()=>{
+            document.getElementById("mapnameinput").value='';
+            sendForm()
+        });
     </script>
 </head>
 <body>
     
     <%- include('navheader'); %>
     <form onsubmit="sendForm(event)" id="search-form">
-        <input type="text" placeholder="Map name" name="query">
+        <input type="text" placeholder="Map name" name="query" id="mapnameinput">
         <input type="hidden" name="count" value="20"/>
         <input type="hidden" name="page" value="0" id="pageinput" autocomplete="off"/>
         <input type="submit" value="Search">

@@ -137,11 +137,28 @@ var MysteryPano = class MysteryPano {
 				}
 			}, {capture:true});
 		}
-		panodiv.addEventListener('keydown', (event) => {
+		panodiv.addEventListener('keydown', event=>{
 			if(!(this.game_info?.rules.moving && this.game_info?.rules.panning && this.game_info?.rules.zooming)){
 				event.stopPropagation();
 			}
-		}, {capture:true});
+		});
+		this.root.querySelector('.pano-container-real').addEventListener('keydown', (()=>{
+			let previous_move_timestamp = -42069;
+			return (event) => {
+				console.log(event.key);
+				//todo try to come up with a way to rate limit self to prevent google rate limiting without interfering with normal use
+				if([' ','Enter'].includes(event.key)){
+					const now = Date.now();
+					const elapsed = now-previous_move_timestamp;
+					console.log(elapsed);
+					if(elapsed>0 && elapsed<250){
+					}
+					else{
+						previous_move_timestamp = now;
+					}
+				}
+			}
+		})(), {capture:true});
 	}
 	switch_view(view_class){
 		for(const elem of this.root.children){
@@ -606,7 +623,8 @@ var MysteryPano = class MysteryPano {
 		for(const elem of this.root.getElementsByClassName("round-results-message")){
 			elem.innerHTML =
 				`Round ${round_info.round+1} results:<br>
-				${round_info.guess.score} point${round_info.guess.score==1 ? '' : 's'}!
+				<b>${round_info.guess.score}</b> point${round_info.guess.score==1 ? '' : 's'}! (${
+					MysteryPano.format_time(round_info.guess.elapsed)})
 				<br>${ 
 				no_guess ? 
 				`You did not make a guess in time` : 
@@ -738,7 +756,7 @@ var MysteryPano = class MysteryPano {
 			base.appendChild(table);
 			base.appendChild(document.createElement('br'));
 
-			if(!game_info.challengers){
+			if(!game_info.challengers && !(this.game_info.challenge===false)){
 				const show_challengers = document.createElement("button");
 				show_challengers.innerHTML = "Show challengers"; 
 				show_challengers.addEventListener('click',()=>this.socket.send(JSON.stringify({type:"show_challengers"})));
