@@ -142,7 +142,7 @@ var MysteryPano = class MysteryPano {
 				event.stopPropagation();
 			}
 		});
-		this.root.querySelector('.pano-container-real').addEventListener('keydown', (()=>{
+		/*this.root.querySelector('.pano-container-real').addEventListener('keydown', (()=>{
 			let previous_move_timestamp = -42069;
 			return (event) => {
 				console.log(event.key);
@@ -158,7 +158,7 @@ var MysteryPano = class MysteryPano {
 					}
 				}
 			}
-		})(), {capture:true});
+		})(), {capture:true});*/
 	}
 	switch_view(view_class){
 		for(const elem of this.root.children){
@@ -250,6 +250,25 @@ var MysteryPano = class MysteryPano {
 				...this.get_pano_control_options()
 			})
 			google.maps.event.addListener(this.pano, "pov_changed", this.pov_changed.bind(this));
+			google.maps.event.addListener(this.pano, "status_changed", ()=>{
+				console.log(this.pano.getStatus());
+				if(this.pano.getStatus()==google.maps.StreetViewStatus.ZERO_RESULTS){
+					console.log("broken pano")
+					//workaround for broken individual panos (pretty common)
+					const history = this.movement_history_with_pop
+					const prev1 = history[history.length-1]
+					const prev2 = history[history.length-2]
+					if(prev1 && prev2){
+						console.log(JSON.stringify(history[history.length-1]), history.length)
+						//You can sort of abuse this by placing breadcrumbs, running far back, following breadcrumbs, then moving forward, then you will teleport really far forward 
+						this.pano.setPosition({
+							lat:prev1.lat+2.5*(prev1.lat-prev2.lat),
+							lng:prev1.lng+2.5*(prev1.lng-prev2.lng)
+						})
+						console.log(JSON.stringify(history[history.length-1]), history.length)
+					}
+				}
+			});
 			
 		}
 		this.pano.setVisible(true);
