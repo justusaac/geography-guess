@@ -136,6 +136,12 @@ class MapFile{
 		}
 		return output;
 	}
+	async seek(pos){
+		return this.largeobject.seekAsync(pos * BUFFER_SIZE, LargeObject.SEEK_SET);
+	}
+	async write_loc_no_seek(loc){
+		return this.largeobject.writeAsync(MapFile.object_to_buffer(loc));
+	}
 	async write_loc(loc){
 		await this.largeobject.seekAsync(0, LargeObject.SEEK_END);
 		return this.largeobject.writeAsync(MapFile.object_to_buffer(loc));

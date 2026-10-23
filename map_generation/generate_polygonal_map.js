@@ -13,12 +13,14 @@ app.use(express.json());
 
 const parameter_regexes = {
 	desired_locations: /^\d+$/,
-	boundaries: /.(geo)?js(on)?$/i
+	boundaries: /.(geo)?js(on)?$/i,
+	start_pos: /^start=\d+$/,
 };
 const help_regex = /^-?-h(elp)?$/i;
 const parameters = {
 	desired_locations:1000,
-	boundaries:[]
+	boundaries:[],
+	start_pos:null
 };
 next_arg: for(let i=2; i<process.argv.length; i++){
 	const arg = process.argv[i];
@@ -28,6 +30,7 @@ Command line arguments are parsed based on matching a regex.
 ${help_regex} : Prints this message and exits
 ${parameter_regexes.desired_locations} : Number of locations to add (default ${parameters.desired_locations})
 ${parameter_regexes.boundaries} : GeoJSON file with polygons to search (default entire world)
+${parameter_regexes.start_pos} : Position in map file to start overwriting (default appending to end)
 Anything else : Output map name (default based on polygon file)
 		`)
 		process.exit(0);
@@ -36,6 +39,9 @@ Anything else : Output map name (default based on polygon file)
 		if(parameter_regexes[prop].test(arg)){
 			if(prop=="boundaries"){
 				parameters[prop].push(arg)
+			}
+			else if(prop=="start_pos"){
+				parameters[prop] = parseInt(arg.split('=')[1])
 			}
 			else{
 				parameters[prop] = arg;
@@ -47,7 +53,7 @@ Anything else : Output map name (default based on polygon file)
 }
 
 parameters.mapname ??= path.basename(parameters.boundaries[0] ?? "World").split(".")[0];
-const {desired_locations, boundaries, mapname} = parameters;
+const {desired_locations, boundaries, mapname, start_pos} = parameters;
 
 ;(async ()=>{
 
@@ -59,8 +65,8 @@ if(!mapid){
 	mapid = await MapFile.create(mapname, `Auto-generated ${mapname} map`, site_admin_user_id);
 }
 const map = await MapFile.open(mapid, true);
-
 const initial_loc_count = await map.location_count();
+await map.seek(start_pos===null ? initial_loc_count : start_pos)
 
 
 const shutdown = (()=>{
@@ -94,7 +100,7 @@ app.ws("/locationstream", (ws,req) => {
 			if(!map.largeobject){
 				return;
 			}
-			await map.write_loc(JSON.parse(msg));		
+			await map.write_loc_no_seek(JSON.parse(msg));		
 			total_found_locations++
 			process.stdout.clearLine();
 			process.stdout.cursorTo(0);
