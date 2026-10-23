@@ -681,11 +681,11 @@ passport.use('local-guest', new LocalStrategy(async (username, password, next) =
     }
     const msg = findLoginInfoProblems({username,password}, true);
     if(msg){
-        return next(msg);
+        return next(null, false, {message:msg})
     }
     const [success,info] = await addUserToDb(username, '');
     if(!success){
-        return next(info);
+        return next(null, false, {message:info})
     }
     return next(null, {userid: info.userid, username: info.username});
 }));
